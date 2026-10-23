@@ -20,6 +20,7 @@ EXPECTED_TABLES = {
 
 # ---------- helpers -------------------------------------------------------------------------
 
+
 def insert(conn, sql, **params):
     return conn.execute(text(sql), params).scalar_one()
 
@@ -33,7 +34,9 @@ def violates(conn, constraint, sql, **params):
 
 
 def make_admin(conn):
-    role_id = insert(conn, "INSERT INTO roles (name) VALUES (:n) RETURNING id", n=uuid.uuid4().hex[:8])
+    role_id = insert(
+        conn, "INSERT INTO roles (name) VALUES (:n) RETURNING id", n=uuid.uuid4().hex[:8]
+    )
     return insert(
         conn,
         "INSERT INTO admin_users (email, password_hash, full_name, role_id) "
@@ -54,7 +57,8 @@ def make_player(conn, birth_date="1990-01-01"):
 
 def make_wallet(conn, player_id, balance=0):
     conn.execute(
-        text("INSERT INTO wallets (player_id, balance) VALUES (:p, :b)"), {"p": player_id, "b": balance}
+        text("INSERT INTO wallets (player_id, balance) VALUES (:p, :b)"),
+        {"p": player_id, "b": balance},
     )
     return player_id
 
@@ -83,6 +87,7 @@ def make_session(conn, player_id, game_id):
 
 # ---------- structure -----------------------------------------------------------------------
 
+
 def test_mappers_configure():
     configure_mappers()  # raises if any model is inconsistent
 
@@ -100,6 +105,7 @@ def test_models_match_migrations(engine):
 
 
 # ---------- players, wallets, transactions --------------------------------------------------
+
 
 def test_players_must_be_adults(conn):
     with pytest.raises(IntegrityError) as exc:
@@ -181,6 +187,7 @@ def test_invalid_enum_value_is_rejected(conn):
 
 # ---------- games, sessions, bets -----------------------------------------------------------
 
+
 def test_session_cannot_end_before_it_starts(conn):
     player, game = make_player(conn), make_game(conn)
     violates(
@@ -200,8 +207,16 @@ def test_bet_stake_must_be_positive(conn):
 
 def test_bet_is_win_is_computed_by_the_database(conn):
     session = make_session(conn, make_player(conn), make_game(conn))
-    won = insert(conn, "INSERT INTO bets (session_id, stake, payout) VALUES (:s, 10, 25) RETURNING is_win", s=session)
-    lost = insert(conn, "INSERT INTO bets (session_id, stake, payout) VALUES (:s, 10, 0) RETURNING is_win", s=session)
+    won = insert(
+        conn,
+        "INSERT INTO bets (session_id, stake, payout) VALUES (:s, 10, 25) RETURNING is_win",
+        s=session,
+    )
+    lost = insert(
+        conn,
+        "INSERT INTO bets (session_id, stake, payout) VALUES (:s, 10, 0) RETURNING is_win",
+        s=session,
+    )
     assert won is True
     assert lost is False
 
@@ -216,6 +231,7 @@ def test_cannot_delete_a_game_that_has_sessions(conn):
 
 
 # ---------- risk ----------------------------------------------------------------------------
+
 
 def test_alert_resolved_at_must_match_status(conn):
     player = make_player(conn)
@@ -234,6 +250,7 @@ def test_alert_resolved_at_must_match_status(conn):
 
 
 # ---------- materialized view ---------------------------------------------------------------
+
 
 def test_daily_game_stats_aggregates_bets(conn):
     p1, p2, game = make_player(conn), make_player(conn), make_game(conn)

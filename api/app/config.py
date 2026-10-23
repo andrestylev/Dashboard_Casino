@@ -8,6 +8,7 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+psycopg://postgres:postgres@localhost:55432/casino"
     web_dir: str = "web/dist"  # folder with the built frontend, served at "/"
+    secure_auth_cookies: bool = False
 
 
 settings = Settings()

@@ -6,6 +6,8 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from sqlalchemy.exc import ProgrammingError, SQLAlchemyError
 
+from app.api.auth import router as auth_router
+from app.api.read import router as read_router
 from app.config import settings
 from app.db import engine
 
@@ -14,6 +16,8 @@ app = FastAPI(
     docs_url="/api/docs",
     openapi_url="/api/openapi.json",
 )
+app.include_router(auth_router)
+app.include_router(read_router)
 
 
 @app.get("/api/health")

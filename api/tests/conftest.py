@@ -30,7 +30,9 @@ def engine():
 
     cfg = Config(str(API_DIR / "alembic.ini"))
     cfg.set_main_option("script_location", str(API_DIR / "alembic"))
-    cfg.set_main_option("sqlalchemy.url", url.render_as_string(hide_password=False).replace("%", "%%"))
+    cfg.set_main_option(
+        "sqlalchemy.url", url.render_as_string(hide_password=False).replace("%", "%%")
+    )
     command.upgrade(cfg, "head")
 
     eng = create_engine(url)
