@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.venv/
+.env
+.pytest_cache/
+.ruff_cache/
+dist/
+!web/dist/
+node_modules/
+*.log
+packaging/windows/downloads/*.zip
+VC_redist.x64.exe

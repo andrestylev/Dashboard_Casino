@@ -1,0 +1,22 @@
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["api"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.ruff.lint.isort]
+# api/alembic/ (our migrations folder) shares its name with the library
+known-third-party = ["alembic"]
+
+[tool.ruff.lint.per-file-ignores]
+# Alembic-generated files keep Alembic's own style; tests keep long SQL strings on one line
+"api/alembic/versions/*.py" = ["E501", "I", "UP"]
+"api/tests/*.py" = ["E501"]
+# The generator's catalogue rows and SQL checks are clearer when kept intact.
+"api/scripts/seed.py" = ["E501"]
+
+[tool.pytest.ini_options]
+pythonpath = ["api"]
+testpaths = ["api/tests"]

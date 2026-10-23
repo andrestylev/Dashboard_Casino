@@ -1,0 +1,42 @@
+# Development stack: PostgreSQL + API with hot reload.
+# Open http://localhost:8000 after `docker compose up --build`.
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: casino
+    ports:
+      - "55432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./seed:/docker-entrypoint-initdb.d:ro   # runs *.sql the first time the volume is created
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d casino"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: ./api
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/casino
+      TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/casino_test
+      WEB_DIR: /web/dist
+    volumes:
+      - ./api/app:/srv/app
+      - ./api/scripts:/srv/scripts
+      - ./api/alembic:/srv/alembic
+      - ./api/alembic.ini:/srv/alembic.ini
+      - ./api/tests:/srv/tests
+      - ./web/dist:/web/dist:ro
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
