@@ -54,11 +54,16 @@ if not exist "%PGDATA%\.seed_done" (
   echo [3/4] Seed data already loaded.
 )
 
-REM --- 4. Start the API (runs in this window; the browser opens when it is ready) ---
+REM --- 4. Apply the auth-schema upgrade (safe to rerun on an existing demo database) ---
+echo [4/5] Preparing administrator usernames...
+"%PGBIN%\psql.exe" -h 127.0.0.1 -p %PGPORT% -U postgres -d casino -q -v ON_ERROR_STOP=1 -f "%~dp0seed\zzz_admin_usernames.sql"
+if errorlevel 1 goto :fail
+
+REM --- 5. Start the API (runs in this window; the browser opens when it is ready) ---
 set "DATABASE_URL=postgresql+psycopg://postgres@127.0.0.1:%PGPORT%/casino"
 set "WEB_DIR=%~dp0web\dist"
 
-echo [4/4] Starting API on http://localhost:%API_PORT% ...
+echo [5/5] Starting API on http://localhost:%API_PORT% ...
 echo.
 echo  Keep this window open while presenting.
 echo  Press Ctrl+C (or close the window) to stop.

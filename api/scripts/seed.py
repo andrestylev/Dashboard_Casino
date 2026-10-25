@@ -1335,6 +1335,7 @@ def table_data(ctx: Ctx):
         "admin_users",
         [
             "id",
+            "username",
             "email",
             "password_hash",
             "full_name",
@@ -1344,7 +1345,7 @@ def table_data(ctx: Ctx):
             "last_login_at",
             "updated_at",
         ],
-        [(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[7] or a[6]) for a in ctx.admin_rows],
+        [(a[0], a[1].split("@", 1)[0], a[1], *a[2:7], a[7], a[7] or a[6]) for a in ctx.admin_rows],
     )
     yield (
         "game_categories",

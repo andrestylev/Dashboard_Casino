@@ -35,6 +35,7 @@ class AdminUser(Base):
     __tablename__ = "admin_users"
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    username: Mapped[str] = mapped_column(String(40), unique=True)
     email: Mapped[str] = mapped_column(String(255), unique=True)
     password_hash: Mapped[str] = mapped_column(String(255))
     full_name: Mapped[str] = mapped_column(String(120))
@@ -52,6 +53,7 @@ class AdminUser(Base):
 
     __table_args__ = (
         CheckConstraint("email = lower(email)", name="email_lowercase"),
+        CheckConstraint("username = lower(username)", name="username_lowercase"),
         CheckConstraint("failed_login_attempts >= 0", name="failed_attempts_non_negative"),
         CheckConstraint("NOT totp_enabled OR totp_secret IS NOT NULL", name="totp_secret_required"),
     )

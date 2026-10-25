@@ -1,30 +1,26 @@
-import secrets
 from datetime import UTC, datetime
 from typing import Annotated
 
-import pyotp
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from fastapi.responses import JSONResponse
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.models.security import AdminRecoveryCode, AdminSession, AdminUser, Role
-from app.schemas import AdminRead, LoginRequest, TotpEnableRequest
+from app.models.security import AdminSession, AdminUser, Role
+from app.schemas import AdminRead, LoginRequest, RegistrationRequest
 from app.security import (
     SESSION_COOKIE,
     AdminPrincipal,
     DatabaseSession,
     add_audit,
     clear_session_cookie,
-    consume_recovery_code,
     create_session,
     current_admin,
+    password_hasher,
     record_failed_login,
-    recovery_code_digest,
     set_session_cookie,
     token_digest,
-    totp_is_valid,
-    user_by_email,
+    user_by_username,
     verify_password,
 )
 
@@ -32,13 +28,19 @@ router = APIRouter(prefix="/api/auth", tags=["authentication"])
 
 
 def admin_read(user: AdminUser, role: Role) -> AdminRead:
-    return AdminRead(id=user.id, email=user.email, full_name=user.full_name, role=role.name)
+    return AdminRead(
+        id=user.id,
+        username=user.username,
+        email=user.email,
+        full_name=user.full_name,
+        role=role.name,
+    )
 
 
 def invalid_login() -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Invalid credentials or verification code",
+        detail="Invalid username or password",
     )
 
 
@@ -48,8 +50,6 @@ def build_login_response(
     user: AdminUser,
     role: Role,
     response: Response,
-    *,
-    recovery_codes: list[str] | None = None,
 ) -> dict:
     now = datetime.now(UTC)
     user.failed_login_attempts = 0
@@ -67,10 +67,49 @@ def build_login_response(
     )
     db.commit()
     set_session_cookie(response, token)
-    result = {"admin": admin_read(user, role).model_dump(mode="json")}
-    if recovery_codes is not None:
-        result["recovery_codes"] = recovery_codes
-    return result
+    return {"admin": admin_read(user, role).model_dump(mode="json")}
+
+
+@router.post("/register", status_code=status.HTTP_202_ACCEPTED)
+def register(payload: RegistrationRequest, request: Request, db: DatabaseSession):
+    username = payload.username.lower().strip()
+    email = payload.email.lower().strip()
+    full_name = payload.full_name.strip()
+    if len(full_name) < 2:
+        raise HTTPException(status_code=422, detail="Enter your full name")
+
+    support_role = db.scalar(select(Role).where(Role.name == "support"))
+    if support_role is None:
+        raise HTTPException(status_code=500, detail="Support role is not configured")
+
+    user = AdminUser(
+        username=username,
+        email=email,
+        password_hash=password_hasher.hash(payload.password),
+        full_name=full_name,
+        role_id=support_role.id,
+        is_active=False,
+    )
+    db.add(user)
+    try:
+        db.flush()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Username or email is already registered",
+        ) from exc
+
+    add_audit(
+        db,
+        request,
+        "auth.registration_requested",
+        admin_user_id=user.id,
+        resource_type="admin_user",
+        resource_id=str(user.id),
+    )
+    db.commit()
+    return {"status": "pending_approval"}
 
 
 @router.post("/login")
@@ -80,18 +119,13 @@ def login(
     response: Response,
     db: DatabaseSession,
 ):
-    if payload.totp_code and payload.recovery_code:
-        raise HTTPException(status_code=422, detail="Use either a TOTP code or a recovery code")
-
-    email = payload.email.lower().strip()
-    user = user_by_email(db, email, lock=True)
-    role = None
-    if user is not None:
-        role = db.get(Role, user.role_id)
+    username = payload.username.lower().strip()
+    user = user_by_username(db, username, lock=True)
+    role = db.get(Role, user.role_id) if user is not None else None
     now = datetime.now(UTC)
 
     if user is None or role is None or not user.is_active:
-        record_failed_login(db, user, request, email)
+        record_failed_login(db, user, request, username)
         db.commit()
         raise invalid_login()
 
@@ -112,117 +146,11 @@ def login(
         user.locked_until = None
 
     if not verify_password(user.password_hash, payload.password):
-        record_failed_login(db, user, request, email)
-        db.commit()
-        raise invalid_login()
-
-    if not user.totp_enabled:
-        if user.totp_secret is None:
-            user.totp_secret = pyotp.random_base32()
-        add_audit(
-            db,
-            request,
-            "auth.totp_setup_started",
-            admin_user_id=user.id,
-            resource_type="admin_user",
-            resource_id=str(user.id),
-        )
-        db.commit()
-        return JSONResponse(
-            status_code=status.HTTP_202_ACCEPTED,
-            content={
-                "status": "totp_setup_required",
-                "provisioning_uri": pyotp.TOTP(user.totp_secret).provisioning_uri(
-                    name=user.email, issuer_name="Casino Admin"
-                ),
-            },
-        )
-
-    if user.totp_secret is None:
-        raise HTTPException(status_code=500, detail="TOTP is enabled without a configured secret")
-
-    valid = payload.totp_code is not None and totp_is_valid(user.totp_secret, payload.totp_code)
-    if payload.recovery_code is not None:
-        valid = consume_recovery_code(db, user, payload.recovery_code)
-    if not valid:
-        record_failed_login(db, user, request, email)
+        record_failed_login(db, user, request, username)
         db.commit()
         raise invalid_login()
 
     return build_login_response(db, request, user, role, response)
-
-
-@router.post("/totp/enable", status_code=status.HTTP_200_OK)
-def enable_totp(
-    payload: TotpEnableRequest,
-    request: Request,
-    response: Response,
-    db: DatabaseSession,
-):
-    email = payload.email.lower().strip()
-    user = user_by_email(db, email, lock=True)
-    if (
-        user is None
-        or not user.is_active
-        or not verify_password(user.password_hash, payload.password)
-    ):
-        record_failed_login(db, user, request, email)
-        db.commit()
-        raise invalid_login()
-
-    now = datetime.now(UTC)
-    if user.locked_until is not None and user.locked_until > now:
-        add_audit(
-            db,
-            request,
-            "auth.login_locked",
-            admin_user_id=user.id,
-            resource_type="admin_user",
-            resource_id=str(user.id),
-        )
-        db.commit()
-        raise invalid_login()
-    if user.locked_until is not None:
-        user.failed_login_attempts = 0
-        user.locked_until = None
-
-    role = db.get(Role, user.role_id)
-    if role is None:
-        raise HTTPException(status_code=500, detail="Administrator role is missing")
-    if user.totp_enabled:
-        raise HTTPException(status_code=409, detail="TOTP is already enabled")
-    if user.totp_secret is None or not totp_is_valid(user.totp_secret, payload.totp_code):
-        record_failed_login(db, user, request, email)
-        db.commit()
-        raise invalid_login()
-
-    user.totp_enabled = True
-    recovery_codes = [secrets.token_urlsafe(24) for _ in range(10)]
-    db.add_all(
-        [
-            AdminRecoveryCode(
-                admin_user_id=user.id,
-                code_hash=recovery_code_digest(code),
-            )
-            for code in recovery_codes
-        ]
-    )
-    add_audit(
-        db,
-        request,
-        "auth.totp_enabled",
-        admin_user_id=user.id,
-        resource_type="admin_user",
-        resource_id=str(user.id),
-    )
-    return build_login_response(
-        db,
-        request,
-        user,
-        role,
-        response,
-        recovery_codes=recovery_codes,
-    )
 
 
 @router.post("/refresh")
@@ -240,7 +168,6 @@ def refresh(request: Request, response: Response, db: DatabaseSession):
             AdminSession.revoked_at.is_(None),
             AdminSession.expires_at > now,
             AdminUser.is_active.is_(True),
-            AdminUser.totp_enabled.is_(True),
         )
         .with_for_update()
     ).first()

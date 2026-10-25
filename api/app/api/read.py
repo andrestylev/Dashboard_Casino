@@ -1,13 +1,15 @@
-from datetime import datetime
+import calendar
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, select
+from sqlalchemy import Date, Integer, case, cast, extract, func, select
 
 from app.models.enums import (
     AlertSeverity,
     AlertStatus,
     AlertType,
+    Channel,
     KycStatus,
     PlayerStatus,
     TransactionStatus,
@@ -21,6 +23,11 @@ from app.models.security import AuditLog
 from app.schemas import (
     AuditRead,
     BetRead,
+    DashboardDailyMetrics,
+    DashboardDistributionItem,
+    DashboardHeatmapCell,
+    DashboardMetrics,
+    DashboardMonthlyGGR,
     GameRead,
     Page,
     PlayerRead,
@@ -31,6 +38,15 @@ from app.security import DatabaseSession, current_admin, require_super_admin
 
 router = APIRouter(prefix="/api", tags=["casino data"], dependencies=[Depends(current_admin)])
 PAGE_SIZE_MAX = 100
+DASHBOARD_RANGE_DAYS_MAX = 366
+VIP_TIER_LABELS = {
+    VipTier.STANDARD: "Standard",
+    VipTier.SILVER: "Silver",
+    VipTier.GOLD: "Gold",
+    VipTier.PLATINUM: "Platinum",
+    VipTier.DIAMOND: "Diamond",
+}
+AGE_BANDS = ("18-25", "26-35", "36-45", "46-55", "56+")
 
 
 def page_bounds(page: int, page_size: int) -> tuple[int, int]:
@@ -39,6 +55,255 @@ def page_bounds(page: int, page_size: int) -> tuple[int, int]:
 
 def escape_like(value: str) -> str:
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def subtract_months(value: datetime, months: int) -> datetime:
+    month_index = value.year * 12 + value.month - 1 - months
+    year, zero_based_month = divmod(month_index, 12)
+    month = zero_based_month + 1
+    day = min(value.day, calendar.monthrange(year, month)[1])
+    return value.replace(year=year, month=month, day=day)
+
+
+def distribution_items(
+    counts: dict[str, int], labels: dict[str, str], total: int
+) -> list[DashboardDistributionItem]:
+    return [
+        DashboardDistributionItem(
+            key=key,
+            label=labels[key],
+            count=counts.get(key, 0),
+            percentage=round(counts.get(key, 0) * 100 / total, 1) if total else 0,
+        )
+        for key in labels
+    ]
+
+
+@router.get("/dashboard/metrics", response_model=DashboardMetrics)
+def dashboard_metrics(
+    db: DatabaseSession,
+    start_date: date,
+    end_date: date,
+    registration_months: Annotated[str, Query(pattern="^(all|1|3|6)$")] = "all",
+):
+    if end_date < start_date:
+        raise HTTPException(status_code=422, detail="end_date must be on or after start_date")
+    day_count = (end_date - start_date).days + 1
+    if day_count > DASHBOARD_RANGE_DAYS_MAX:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Date range cannot exceed {DASHBOARD_RANGE_DAYS_MAX} days",
+        )
+
+    start_at = datetime.combine(start_date, time.min, tzinfo=UTC)
+    end_at = datetime.combine(end_date + timedelta(days=1), time.min, tzinfo=UTC)
+    utc_bet_date = cast(func.timezone("UTC", Bet.placed_at), Date)
+    utc_transaction_date = cast(func.timezone("UTC", Transaction.completed_at), Date)
+
+    totals = db.execute(
+        select(
+            func.count(Bet.id),
+            func.coalesce(func.sum(Bet.stake - Bet.payout), 0),
+            func.count(func.distinct(GameSession.player_id)),
+        )
+        .select_from(Bet)
+        .join(GameSession, Bet.session_id == GameSession.id)
+        .where(Bet.placed_at >= start_at, Bet.placed_at < end_at)
+    ).one()
+    transaction_totals = db.execute(
+        select(
+            func.coalesce(
+                func.sum(
+                    case(
+                        (Transaction.type == TransactionType.DEPOSIT, Transaction.amount),
+                        else_=0,
+                    )
+                ),
+                0,
+            ),
+            func.coalesce(
+                func.sum(
+                    case(
+                        (Transaction.type == TransactionType.WITHDRAWAL, Transaction.amount),
+                        else_=0,
+                    )
+                ),
+                0,
+            ),
+        ).where(
+            Transaction.status == TransactionStatus.COMPLETED,
+            Transaction.completed_at >= start_at,
+            Transaction.completed_at < end_at,
+        )
+    ).one()
+    daily_bets = db.execute(
+        select(utc_bet_date, func.coalesce(func.sum(Bet.stake - Bet.payout), 0))
+        .select_from(Bet)
+        .join(GameSession, Bet.session_id == GameSession.id)
+        .where(Bet.placed_at >= start_at, Bet.placed_at < end_at)
+        .group_by(utc_bet_date)
+    ).all()
+    daily_transactions = db.execute(
+        select(
+            utc_transaction_date,
+            func.coalesce(
+                func.sum(
+                    case(
+                        (Transaction.type == TransactionType.DEPOSIT, Transaction.amount),
+                        else_=0,
+                    )
+                ),
+                0,
+            ),
+            func.coalesce(
+                func.sum(
+                    case(
+                        (Transaction.type == TransactionType.WITHDRAWAL, Transaction.amount),
+                        else_=0,
+                    )
+                ),
+                0,
+            ),
+        )
+        .where(
+            Transaction.status == TransactionStatus.COMPLETED,
+            Transaction.completed_at >= start_at,
+            Transaction.completed_at < end_at,
+        )
+        .group_by(utc_transaction_date)
+    ).all()
+
+    daily = {
+        start_date + timedelta(days=offset): {
+            "ggr": 0,
+            "deposits": 0,
+            "withdrawals": 0,
+        }
+        for offset in range(day_count)
+    }
+    for day, ggr in daily_bets:
+        daily[day]["ggr"] = ggr
+    for day, deposits, withdrawals in daily_transactions:
+        daily[day]["deposits"] = deposits
+        daily[day]["withdrawals"] = withdrawals
+
+    now = datetime.now(UTC)
+    players_query = select(Player.registration_channel, func.count(Player.id)).group_by(
+        Player.registration_channel
+    )
+    if registration_months != "all":
+        players_query = players_query.where(
+            Player.registered_at >= subtract_months(now, int(registration_months))
+        )
+    channel_counts = {
+        channel.value: count for channel, count in db.execute(players_query).all()
+    }
+    channel_total = sum(channel_counts.values())
+    channels = distribution_items(
+        channel_counts,
+        {Channel.WEB.value: "Web", Channel.MOBILE.value: "Mobile"},
+        channel_total,
+    )
+
+    vip_counts = {
+        tier.value: count
+        for tier, count in db.execute(
+            select(Player.vip_tier, func.count(Player.id)).group_by(Player.vip_tier)
+        ).all()
+    }
+    all_players = sum(vip_counts.values())
+    vip_tiers = distribution_items(
+        vip_counts,
+        {tier.value: label for tier, label in VIP_TIER_LABELS.items()},
+        all_players,
+    )
+
+    today_utc = datetime.now(UTC).date()
+    age = cast(extract("year", func.age(today_utc, Player.birth_date)), Integer)
+    age_bucket = case(
+        (age < 26, "18-25"),
+        (age < 36, "26-35"),
+        (age < 46, "36-45"),
+        (age < 56, "46-55"),
+        else_="56+",
+    )
+    age_counts = {
+        bucket: count
+        for bucket, count in db.execute(
+            select(age_bucket, func.count(Player.id)).group_by(age_bucket)
+        ).all()
+    }
+    age_bands = distribution_items(
+        age_counts, {band: band for band in AGE_BANDS}, all_players
+    )
+
+    all_time_ggr = db.scalar(select(func.coalesce(func.sum(Bet.stake - Bet.payout), 0)))
+    current_month = date(now.year, now.month, 1)
+    first_month = subtract_months(datetime.combine(current_month, time.min), 5).date()
+    monthly_start = datetime.combine(first_month, time.min, tzinfo=UTC)
+    monthly_end = datetime.combine(
+        current_month + timedelta(days=calendar.monthrange(now.year, now.month)[1]),
+        time.min,
+        tzinfo=UTC,
+    )
+    bet_month = cast(func.date_trunc("month", func.timezone("UTC", Bet.placed_at)), Date)
+    monthly_rows = db.execute(
+        select(bet_month, func.coalesce(func.sum(Bet.stake - Bet.payout), 0))
+        .where(Bet.placed_at >= monthly_start, Bet.placed_at < monthly_end)
+        .group_by(bet_month)
+    ).all()
+    monthly_counts = {month: ggr for month, ggr in monthly_rows}
+    monthly_ggr = []
+    for offset in range(6):
+        month_start = subtract_months(
+            datetime.combine(current_month, time.min), 5 - offset
+        ).date()
+        monthly_ggr.append(
+            DashboardMonthlyGGR(
+                month=month_start,
+                label=month_start.strftime("%b %Y"),
+                ggr=monthly_counts.get(month_start, 0),
+            )
+        )
+
+    weekday = cast(extract("isodow", func.timezone("UTC", Bet.placed_at)), Integer) - 1
+    hour = cast(extract("hour", func.timezone("UTC", Bet.placed_at)), Integer)
+    heatmap_counts = {
+        (day, hour_of_day): count
+        for day, hour_of_day, count in db.execute(
+            select(weekday, hour, func.count(Bet.id)).group_by(weekday, hour)
+        ).all()
+    }
+    bet_heatmap = [
+        DashboardHeatmapCell(
+            weekday=day,
+            hour=hour_of_day,
+            bets_count=heatmap_counts.get((day, hour_of_day), 0),
+        )
+        for day in range(7)
+        for hour_of_day in range(24)
+    ]
+
+    return DashboardMetrics(
+        start_date=start_date,
+        end_date=end_date,
+        ggr=totals[1],
+        deposits=transaction_totals[0],
+        withdrawals=transaction_totals[1],
+        active_players=totals[2],
+        bets_count=totals[0],
+        daily=[
+            DashboardDailyMetrics(date=day, **values)
+            for day, values in daily.items()
+        ],
+        registration_channel_period=registration_months,
+        registration_channels=channels,
+        vip_tiers=vip_tiers,
+        age_bands=age_bands,
+        all_time_ggr=all_time_ggr or 0,
+        monthly_ggr=monthly_ggr,
+        bet_heatmap=bet_heatmap,
+    )
 
 
 @router.get("/players", response_model=Page[PlayerRead])

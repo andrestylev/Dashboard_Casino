@@ -1,6 +1,3 @@
-from urllib.parse import parse_qs, urlsplit
-
-import pyotp
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
@@ -9,12 +6,12 @@ from starlette.status import HTTP_200_OK, HTTP_202_ACCEPTED, HTTP_401_UNAUTHORIZ
 
 from app.db import get_db
 from app.main import app
-from app.security import password_hasher, recovery_code_digest
+from app.security import password_hasher
 
 PASSWORD = "test-password-123"
 
 
-def create_admin(conn, role_name="super_admin", *, totp_enabled=False, secret=None):
+def create_admin(conn, role_name="super_admin", *, is_active=True):
     role_id = conn.execute(
         text("INSERT INTO roles (name) VALUES (:name) RETURNING id"),
         {"name": role_name},
@@ -22,16 +19,16 @@ def create_admin(conn, role_name="super_admin", *, totp_enabled=False, secret=No
     admin_id = conn.execute(
         text(
             "INSERT INTO admin_users "
-            "(email, password_hash, full_name, role_id, totp_enabled, totp_secret) "
-            "VALUES (:email, :password_hash, 'Test Admin', :role_id, :enabled, :secret) "
+            "(username, email, password_hash, full_name, role_id, is_active) "
+            "VALUES (:username, :email, :password_hash, 'Test Admin', :role_id, :is_active) "
             "RETURNING id"
         ),
         {
+            "username": role_name,
             "email": f"{role_name}@example.test",
             "password_hash": password_hasher.hash(PASSWORD),
             "role_id": role_id,
-            "enabled": totp_enabled,
-            "secret": secret,
+            "is_active": is_active,
         },
     ).scalar_one()
     return admin_id, f"{role_name}@example.test"
@@ -53,28 +50,14 @@ def api_client(conn):
     app.dependency_overrides.clear()
 
 
-def test_totp_enrollment_recovery_rotation_and_logout(conn, api_client):
+def test_username_login_session_rotation_and_logout(conn, api_client):
     create_admin(conn)
     response = api_client.post(
         "/api/auth/login",
-        json={"email": "super_admin@example.test", "password": PASSWORD},
-    )
-    assert response.status_code == HTTP_202_ACCEPTED
-    assert response.json()["status"] == "totp_setup_required"
-    uri = response.json()["provisioning_uri"]
-    secret = parse_qs(urlsplit(uri).query)["secret"][0]
-
-    response = api_client.post(
-        "/api/auth/totp/enable",
-        json={
-            "email": "super_admin@example.test",
-            "password": PASSWORD,
-            "totp_code": pyotp.TOTP(secret).now(),
-        },
+        json={"username": "SUPER_ADMIN", "password": PASSWORD},
     )
     assert response.status_code == HTTP_200_OK
-    recovery_codes = response.json()["recovery_codes"]
-    assert len(recovery_codes) == 10
+    assert response.json()["admin"]["username"] == "super_admin"
     assert api_client.get("/api/auth/me").status_code == HTTP_200_OK
 
     cookie = api_client.cookies.get("admin_session")
@@ -85,36 +68,6 @@ def test_totp_enrollment_recovery_rotation_and_logout(conn, api_client):
 
     assert api_client.post("/api/auth/logout").status_code == 204
     assert api_client.get("/api/auth/me").status_code == HTTP_401_UNAUTHORIZED
-    response = api_client.post(
-        "/api/auth/login",
-        json={
-            "email": "super_admin@example.test",
-            "password": PASSWORD,
-            "recovery_code": recovery_codes[0],
-        },
-    )
-    assert response.status_code == HTTP_200_OK
-    assert api_client.post("/api/auth/logout").status_code == 204
-    response = api_client.post(
-        "/api/auth/login",
-        json={
-            "email": "super_admin@example.test",
-            "password": PASSWORD,
-            "recovery_code": recovery_codes[0],
-        },
-    )
-    assert response.status_code == HTTP_401_UNAUTHORIZED
-
-    assert (
-        conn.execute(
-            text(
-                "SELECT count(*) FROM admin_recovery_codes "
-                "WHERE code_hash = :digest AND used_at IS NOT NULL"
-            ),
-            {"digest": recovery_code_digest(recovery_codes[0])},
-        ).scalar_one()
-        == 1
-    )
 
 
 def test_login_failures_are_audited_and_lock_account(conn, api_client):
@@ -122,7 +75,7 @@ def test_login_failures_are_audited_and_lock_account(conn, api_client):
     for _ in range(5):
         response = api_client.post(
             "/api/auth/login",
-            json={"email": "super_admin@example.test", "password": "wrong-password"},
+            json={"username": "super_admin", "password": "wrong-password"},
         )
         assert response.status_code == HTTP_401_UNAUTHORIZED
     attempts, locked_until = conn.execute(
@@ -138,8 +91,69 @@ def test_login_failures_are_audited_and_lock_account(conn, api_client):
     )
 
 
+def test_registration_requires_super_admin_approval(conn, api_client):
+    super_admin_id, _ = create_admin(conn)
+    conn.execute(text("INSERT INTO roles (name) VALUES ('support')"))
+    response = api_client.post(
+        "/api/auth/register",
+        json={
+            "username": "new.support",
+            "email": "New.Support@example.test",
+            "full_name": "New Support",
+            "password": "new-password-123",
+        },
+    )
+    assert response.status_code == HTTP_202_ACCEPTED
+    assert response.json() == {"status": "pending_approval"}
+    assert (
+        conn.execute(
+            text("SELECT is_active FROM admin_users WHERE username = 'new.support'")
+        ).scalar_one()
+        is False
+    )
+    pending_user_id = conn.execute(
+        text("SELECT id FROM admin_users WHERE username = 'new.support'")
+    ).scalar_one()
+    assert (
+        api_client.post(
+            "/api/auth/login",
+            json={"username": "new.support", "password": "new-password-123"},
+        ).status_code
+        == HTTP_401_UNAUTHORIZED
+    )
+    assert api_client.get("/api/admin/pending-registrations").status_code == HTTP_401_UNAUTHORIZED
+
+    response = api_client.post(
+        "/api/auth/login",
+        json={"username": "super_admin", "password": PASSWORD},
+    )
+    assert response.status_code == HTTP_200_OK
+    pending = api_client.get("/api/admin/pending-registrations")
+    assert pending.status_code == HTTP_200_OK
+    assert [item["username"] for item in pending.json()["items"]] == ["new.support"]
+
+    approved = api_client.post(f"/api/admin/users/{pending_user_id}/approve")
+    assert approved.status_code == HTTP_200_OK
+    assert approved.json()["role"] == "support"
+    assert approved.json()["email"] == "new.support@example.test"
+    assert api_client.get("/api/admin/pending-registrations").json()["total"] == 0
+    assert (
+        conn.execute(
+            text("SELECT admin_user_id FROM audit_log WHERE action = 'admin.registration_approved'")
+        ).scalar_one()
+        == super_admin_id
+    )
+
+    api_client.post("/api/auth/logout")
+    login = api_client.post(
+        "/api/auth/login",
+        json={"username": "new.support", "password": "new-password-123"},
+    )
+    assert login.status_code == HTTP_200_OK
+
+
 def test_list_endpoints_filter_and_paginate_and_audit_is_super_admin_only(conn, api_client):
-    create_admin(conn, role_name="support", totp_enabled=True, secret="JBSWY3DPEHPK3PXP")
+    create_admin(conn, role_name="support")
     conn.execute(
         text(
             "INSERT INTO players "
@@ -194,11 +208,7 @@ def test_list_endpoints_filter_and_paginate_and_audit_is_super_admin_only(conn, 
     )
     response = api_client.post(
         "/api/auth/login",
-        json={
-            "email": "support@example.test",
-            "password": PASSWORD,
-            "totp_code": pyotp.TOTP("JBSWY3DPEHPK3PXP").now(),
-        },
+        json={"username": "support", "password": PASSWORD},
     )
     assert response.status_code == HTTP_200_OK
     response = api_client.get("/api/players", params={"q": "player", "page_size": 1})
@@ -225,15 +235,11 @@ def test_list_endpoints_filter_and_paginate_and_audit_is_super_admin_only(conn, 
     assert api_client.get("/api/risk-alerts", params={"severity": "high"}).json()["total"] == 1
     assert api_client.get("/api/audit-log").status_code == 403
 
-    create_admin(conn, role_name="super_admin", totp_enabled=True, secret="JBSWY3DPEHPK3PXP")
+    create_admin(conn, role_name="super_admin")
     assert api_client.post("/api/auth/logout").status_code == 204
     response = api_client.post(
         "/api/auth/login",
-        json={
-            "email": "super_admin@example.test",
-            "password": PASSWORD,
-            "totp_code": pyotp.TOTP("JBSWY3DPEHPK3PXP").now(),
-        },
+        json={"username": "super_admin", "password": PASSWORD},
     )
     assert response.status_code == HTTP_200_OK
     response = api_client.get("/api/audit-log", params={"page_size": 10})

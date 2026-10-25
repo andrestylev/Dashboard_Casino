@@ -39,9 +39,9 @@ def make_admin(conn):
     )
     return insert(
         conn,
-        "INSERT INTO admin_users (email, password_hash, full_name, role_id) "
-        "VALUES (:e, 'x', 'Admin', :r) RETURNING id",
-        e=f"{uuid.uuid4().hex[:8]}@casino.test", r=role_id,
+        "INSERT INTO admin_users (username, email, password_hash, full_name, role_id) "
+        "VALUES (:u, :e, 'x', 'Admin', :r) RETURNING id",
+        u=f"admin_{uuid.uuid4().hex[:8]}", e=f"{uuid.uuid4().hex[:8]}@casino.test", r=role_id,
     )  # fmt: skip
 
 

@@ -1,5 +1,5 @@
-# Development stack: PostgreSQL + API with hot reload.
-# Open http://localhost:8000 after `docker compose up --build`.
+# Development stack: PostgreSQL, API, and Vite with hot reload.
+# Open http://localhost:5173 for frontend development, or :8000 for the built app/API.
 services:
   db:
     image: postgres:16
@@ -38,5 +38,21 @@ services:
       db:
         condition: service_healthy
 
+  web:
+    image: node:22-alpine
+    working_dir: /web
+    command: sh -c "npm ci && npm run dev -- --host 0.0.0.0"
+    environment:
+      VITE_API_PROXY_TARGET: http://api:8000
+      VITE_USE_POLLING: "true"
+    volumes:
+      - ./web:/web
+      - web_node_modules:/web/node_modules
+    ports:
+      - "5173:5173"
+    depends_on:
+      - api
+
 volumes:
   pgdata:
+  web_node_modules:

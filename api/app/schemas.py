@@ -1,7 +1,9 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from app.models.enums import AlertStatus, PlayerStatus
 
 
 class Page[T](BaseModel):
@@ -13,6 +15,7 @@ class Page[T](BaseModel):
 
 class AdminRead(BaseModel):
     id: int
+    username: str
     email: str
     full_name: str
     role: str
@@ -20,6 +23,14 @@ class AdminRead(BaseModel):
 
 class ORMRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
+
+
+class PendingAdminRead(ORMRead):
+    id: int
+    username: str
+    email: str
+    full_name: str
+    created_at: datetime
 
 
 class PlayerRead(ORMRead):
@@ -36,6 +47,7 @@ class PlayerRead(ORMRead):
     registration_channel: str
     registered_at: datetime
     last_login_at: datetime | None
+    self_exclusion_until: datetime | None
     deposit_limit_monthly: Decimal | None
     loss_limit_monthly: Decimal | None
     wallet_balance: Decimal | None = None
@@ -94,6 +106,29 @@ class RiskAlertRead(ORMRead):
     resolution_note: str | None
 
 
+class PlayerStatusUpdate(BaseModel):
+    status: PlayerStatus
+
+
+class GameStatusUpdate(BaseModel):
+    is_active: bool
+
+
+class RiskAlertUpdate(BaseModel):
+    status: AlertStatus
+    resolution_note: str | None = Field(default=None, max_length=2000)
+
+    @model_validator(mode="after")
+    def require_resolution_note(self):
+        if self.status in {AlertStatus.RESOLVED, AlertStatus.DISMISSED} and not (
+            self.resolution_note and self.resolution_note.strip()
+        ):
+            raise ValueError(
+                "A resolution note is required to resolve or dismiss an alert"
+            )
+        return self
+
+
 class AuditRead(ORMRead):
     id: int
     admin_user_id: int | None
@@ -105,14 +140,61 @@ class AuditRead(ORMRead):
     created_at: datetime
 
 
+class DashboardDailyMetrics(BaseModel):
+    date: date
+    ggr: Decimal
+    deposits: Decimal
+    withdrawals: Decimal
+
+
+class DashboardDistributionItem(BaseModel):
+    key: str
+    label: str
+    count: int
+    percentage: float
+
+
+class DashboardMonthlyGGR(BaseModel):
+    month: date
+    label: str
+    ggr: Decimal
+
+
+class DashboardHeatmapCell(BaseModel):
+    weekday: int
+    hour: int
+    bets_count: int
+
+
+class DashboardMetrics(BaseModel):
+    start_date: date
+    end_date: date
+    ggr: Decimal
+    deposits: Decimal
+    withdrawals: Decimal
+    active_players: int
+    bets_count: int
+    daily: list[DashboardDailyMetrics]
+    registration_channel_period: str
+    registration_channels: list[DashboardDistributionItem]
+    vip_tiers: list[DashboardDistributionItem]
+    age_bands: list[DashboardDistributionItem]
+    all_time_ggr: Decimal
+    monthly_ggr: list[DashboardMonthlyGGR]
+    bet_heatmap: list[DashboardHeatmapCell]
+
+
 class LoginRequest(BaseModel):
-    email: str = Field(min_length=3, max_length=255)
+    username: str = Field(min_length=3, max_length=40, pattern=r"^[a-zA-Z0-9._-]+$")
     password: str = Field(min_length=1, max_length=128)
-    totp_code: str | None = Field(default=None, min_length=6, max_length=8)
-    recovery_code: str | None = Field(default=None, min_length=16, max_length=64)
 
 
-class TotpEnableRequest(BaseModel):
-    email: str = Field(min_length=3, max_length=255)
-    password: str = Field(min_length=1, max_length=128)
-    totp_code: str = Field(min_length=6, max_length=8)
+class RegistrationRequest(BaseModel):
+    username: str = Field(min_length=3, max_length=40, pattern=r"^[a-zA-Z0-9._-]+$")
+    email: str = Field(
+        min_length=5,
+        max_length=255,
+        pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$",
+    )
+    full_name: str = Field(min_length=2, max_length=120)
+    password: str = Field(min_length=12, max_length=128)

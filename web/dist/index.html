@@ -1,53 +1,18 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Casino Admin - packaging spike</title>
-  <style>
-    :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
-    body { max-width: 40rem; margin: 3rem auto; padding: 0 1rem; line-height: 1.5; }
-    li { margin: .5rem 0; list-style: none; }
-    .ok::before { content: "\2714  "; color: #1a7f37; }
-    .fail::before { content: "\2718  "; color: #cf222e; }
-    small { opacity: .7; }
-  </style>
-</head>
-<body>
-  <h1>Packaging spike</h1>
-  <p>If every check below is green, this bundle works on this machine.</p>
-  <ul id="checks"><li>Running checks...</li></ul>
-  <script>
-    const list = document.getElementById("checks");
-    function add(ok, text, detail) {
-      const li = document.createElement("li");
-      li.className = ok ? "ok" : "fail";
-      li.textContent = text;
-      if (detail) {
-        const small = document.createElement("small");
-        small.textContent = " - " + detail;
-        li.appendChild(small);
-      }
-      list.appendChild(li);
-    }
-    (async () => {
-      list.innerHTML = "";
-      add(true, "Frontend files served by the API");
-      try {
-        const health = await (await fetch("/api/health")).json();
-        add(health.status === "ok", "API responds");
-      } catch (e) {
-        add(false, "API responds", String(e));
-      }
-      try {
-        const res = await fetch("/api/db-check");
-        const db = await res.json();
-        add(db.database === "ok", "API reaches PostgreSQL", db.version || db.detail);
-        add(db.seed_loaded === true, "Seed data restored", db.seed_note || "spike_check table not found");
-      } catch (e) {
-        add(false, "API reaches PostgreSQL", String(e));
-      }
-    })();
-  </script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#101813" />
+    <meta
+      name="description"
+      content="Secure operations dashboard for the Casino Demo platform."
+    />
+    <title>Casino Admin</title>
+    <script type="module" crossorigin src="/assets/index-CQ7h7k2K.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-6rdabEXK.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
 </html>

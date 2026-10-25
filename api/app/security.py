@@ -1,11 +1,9 @@
 import hashlib
-import hmac
 import ipaddress
 import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
-import pyotp
 from argon2 import PasswordHasher
 from argon2.exceptions import VerificationError, VerifyMismatchError
 from fastapi import Depends, HTTPException, Request, status
@@ -69,7 +67,9 @@ def add_audit(
     )
 
 
-def record_failed_login(db: Session, user: AdminUser | None, request: Request, email: str) -> None:
+def record_failed_login(
+    db: Session, user: AdminUser | None, request: Request, username: str
+) -> None:
     now = datetime.now(UTC)
     if user is not None:
         user.failed_login_attempts += 1
@@ -82,12 +82,12 @@ def record_failed_login(db: Session, user: AdminUser | None, request: Request, e
         admin_user_id=user.id if user else None,
         resource_type="admin_user",
         resource_id=str(user.id) if user else None,
-        details={"email": email},
+        details={"username": username},
     )
 
 
-def user_by_email(db: Session, email: str, *, lock: bool = False) -> AdminUser | None:
-    statement = select(AdminUser).where(AdminUser.email == email.lower().strip())
+def user_by_username(db: Session, username: str, *, lock: bool = False) -> AdminUser | None:
+    statement = select(AdminUser).where(AdminUser.username == username.lower().strip())
     if lock:
         statement = statement.with_for_update()
     return db.scalar(statement)
@@ -137,33 +137,6 @@ def clear_session_cookie(response) -> None:
     )
 
 
-def totp_is_valid(secret: str, code: str) -> bool:
-    return code.isdigit() and pyotp.TOTP(secret).verify(code, valid_window=1)
-
-
-def recovery_code_digest(code: str) -> str:
-    return hashlib.sha256(code.encode("utf-8")).hexdigest()
-
-
-def consume_recovery_code(db: Session, user: AdminUser, code: str) -> bool:
-    from app.models.security import AdminRecoveryCode
-
-    rows = db.scalars(
-        select(AdminRecoveryCode)
-        .where(
-            AdminRecoveryCode.admin_user_id == user.id,
-            AdminRecoveryCode.used_at.is_(None),
-        )
-        .with_for_update()
-    )
-    digest = recovery_code_digest(code)
-    for row in rows:
-        if hmac.compare_digest(row.code_hash, digest):
-            row.used_at = datetime.now(UTC)
-            return True
-    return False
-
-
 def current_admin(
     request: Request,
     db: DatabaseSession,
@@ -182,7 +155,6 @@ def current_admin(
             AdminSession.revoked_at.is_(None),
             AdminSession.expires_at > datetime.now(UTC),
             AdminUser.is_active.is_(True),
-            AdminUser.totp_enabled.is_(True),
         )
     ).first()
     if row is None:

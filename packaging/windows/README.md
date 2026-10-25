@@ -33,8 +33,12 @@ credentials.
 - [ ] Right-click the downloaded zip -> Properties -> **Unblock** (if it came from the internet), then extract
       to a path **without spaces or accents** (e.g. `C:\Users\<user>\casino-demo`).
 - [ ] Double-click `start.bat`. If SmartScreen warns: "More info" -> "Run anyway".
-- [ ] The browser opens and shows **four green checks**.
-- [ ] Close the window, run `start.bat` again (second run must be fast and still green).
+- [ ] The browser opens on the Casino Admin sign-in page.
+- [ ] Sign in with a seeded administrator username and password.
+- [ ] Confirm the Players page loads records, then sign out and sign in again.
+- [ ] Check `http://localhost:8000/api/health` returns `{"status":"ok"}` and
+      `http://localhost:8000/api/db-check` reports the database and seed as loaded.
+- [ ] Close the window, run `start.bat` again (the second run must keep the database and allow normal sign-in).
 - [ ] Delete the `data\` folder and run again (simulates a first run).
 - [ ] Repeat with the network disconnected.
 - [ ] Try it on a real university PC if you can: some block unknown `.exe`/`.bat` (AppLocker).
@@ -48,5 +52,5 @@ credentials.
 | Window closes immediately / program does not start | Blocked by policy (AppLocker, antivirus): use the video backup |
 | Port already in use | Change `PGPORT` / `API_PORT` at the top of `start.bat` |
 
-> The scripts here were written to be tested **on Windows**; they have not been run on Windows yet.
-> That is exactly what this spike is for.
+The bundle is intended to run locally without internet access; the dashboard uses system fonts and
+the API and database are packaged with the app.
