@@ -15,7 +15,7 @@
   --text: #202b24;
   --text-strong: #29392e;
   --text-secondary: #536057;
-  --muted: #87918a;
+  --muted: #58645b;
   --line: #e9ede9;
   --surface: #ffffff;
   --surface-subtle: #f8faf8;
@@ -39,6 +39,10 @@
   --shadow: 0 16px 48px rgba(31, 49, 37, .07);
 }
 
+.auth-panel > .eyebrow {
+  color: #526b58;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -57,6 +61,15 @@ input {
 
 button {
   cursor: pointer;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+[tabindex="0"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
 }
 
 button:disabled {
@@ -125,7 +138,7 @@ a {
 .auth-screen {
   position: relative;
   min-height: 100vh;
-  padding: 42px 24px 24px;
+  padding: 76px 24px 24px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -305,7 +318,7 @@ a {
 }
 
 .muted {
-  color: #7d8980;
+  color: #5f6c62;
   font-size: 13px;
   line-height: 1.65;
 }
@@ -329,7 +342,7 @@ a {
   border: 0;
   border-radius: 7px;
   background: transparent;
-  color: #7e8881;
+  color: #5f6b62;
   font-size: 11px;
   font-weight: 600;
 }
@@ -409,7 +422,7 @@ a {
   justify-content: center;
   gap: 8px;
   margin: 25px 0 0;
-  color: #9ba49d;
+  color: #657269;
   font-size: 10px;
 }
 
@@ -1411,7 +1424,7 @@ a {
 
 .table-toolbar p {
   margin: 5px 0 0;
-  color: #98a199;
+  color: var(--muted);
   font-size: 10px;
 }
 
@@ -1427,12 +1440,12 @@ a {
 .button-export:hover:not(:disabled) { background: #eaf4ea; }
 .button-export:disabled { cursor: wait; opacity: .65; }
 .data-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; padding: 0 19px 16px; }
-.filter-field { display: flex; flex-direction: column; gap: 5px; color: #728075; font-size: 9px; font-weight: 600; }
+.filter-field { display: flex; flex-direction: column; gap: 5px; color: var(--muted); font-size: 9px; font-weight: 600; }
 .filter-field input, .filter-field select { min-width: 130px; height: 34px; padding: 0 8px; border: 1px solid #e3e9e3; border-radius: 6px; outline: none; color: #3c4c40; background: #fff; font-size: 10px; }
 .filter-field input:focus, .filter-field select:focus { border-color: #87a98c; box-shadow: 0 0 0 2px rgba(83, 141, 95, .1); }
 .filter-search input { min-width: 210px; }
 .filter-actions { display: flex; gap: 7px; }
-.button-clear-filters { min-height: 35px; padding: 0 12px; border: 1px solid #e3e9e3; color: #6f7c72; background: #fff; font-size: 10px; }
+.button-clear-filters { min-height: 35px; padding: 0 12px; border: 1px solid #e3e9e3; color: var(--text-secondary); background: #fff; font-size: 10px; }
 .button-clear-filters:hover { background: #f8faf8; }
 .record-details { padding: 13px 15px; border: 1px solid #e8eee8; border-radius: 8px; background: #f8faf8; white-space: normal; }
 .record-details h3 { margin: 0 0 11px; color: #344238; font-size: 11px; }
@@ -1525,7 +1538,7 @@ th {
   padding: 0 15px;
   border-top: 1px solid #eff2ef;
   border-bottom: 1px solid #edf0ed;
-  color: #88938a;
+  color: var(--muted);
   font-size: 9px;
   font-weight: 700;
   letter-spacing: .04em;
@@ -1580,8 +1593,8 @@ td:first-child {
 }
 
 .tone-neutral {
-  color: #6d7c70;
-  background: #f0f3f0;
+  color: #4d5b51;
+  background: #e7ece7;
 }
 
 .empty-value {
@@ -1607,7 +1620,7 @@ td:first-child {
   min-height: 56px;
   padding: 0 18px;
   border-top: 1px solid #edf0ed;
-  color: #919b93;
+  color: var(--muted);
   font-size: 10px;
 }
 
@@ -1668,7 +1681,7 @@ td:first-child {
 
 .phase-note p {
   margin: 0;
-  color: #879188;
+  color: var(--muted);
   font-size: 10px;
   line-height: 1.7;
 }
@@ -1692,6 +1705,22 @@ td:first-child {
 
 .sidebar-scrim {
   display: none;
+}
+
+.table-scroll:focus-visible,
+.heatmap-scroll:focus-visible {
+  border-radius: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
 }
 
 :root[data-theme="dark"] {
@@ -1939,7 +1968,7 @@ td:first-child {
 @media (max-width: 720px) {
   .auth-screen {
     justify-content: flex-start;
-    padding: 20px 13px 16px;
+    padding: 58px 13px 16px;
   }
 
   .auth-card {
@@ -2019,11 +2048,13 @@ td:first-child {
   .sidebar {
     z-index: 11;
     width: 256px;
+    visibility: hidden;
     transform: translateX(-102%);
     transition: transform .2s ease;
   }
 
   .sidebar.sidebar-open {
+    visibility: visible;
     transform: translateX(0);
   }
 
@@ -2070,6 +2101,10 @@ td:first-child {
     gap: 8px;
   }
 
+  .environment-pill {
+    display: none;
+  }
+
   .signout-error {
     padding: 10px 14px;
   }
@@ -2090,6 +2125,8 @@ td:first-child {
 
   .page-heading {
     align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
     margin-bottom: 19px;
   }
 
@@ -2113,8 +2150,8 @@ td:first-child {
   }
 
   .heading-meta {
-    margin-top: 24px;
-    white-space: nowrap;
+    margin-top: 0;
+    white-space: normal;
     font-size: 9px;
   }
 
@@ -2299,10 +2336,60 @@ td:first-child {
   background: var(--surface);
 }
 
+:root[data-theme="dark"] .eyebrow,
+:root[data-theme="dark"] .analytics-section-heading .eyebrow {
+  color: #b7d2bc;
+}
+
+.breadcrumb,
+.environment-pill,
+.page-description,
+.heading-meta,
+.dashboard-toolbar > div span,
+.last-updated,
+.analytics-section-heading p:not(.eyebrow),
+.metric-card p,
+.metric-card small,
+.chart-heading p,
+.chart-legend,
+.donut-legend small,
+.distribution-label small,
+.heatmap-hour,
+.heatmap-day,
+.heatmap-scale,
+.app-footer {
+  color: var(--muted);
+}
+
+.eyebrow {
+  color: #526b58;
+}
+
+.analytics-section-heading .eyebrow {
+  color: #36533e;
+}
+
 @media (max-width: 600px) {
   .auth-preferences {
     top: 10px;
     right: 10px;
+  }
+
+  @media (max-width: 380px) {
+    .top-avatar {
+      display: none;
+    }
+
+    .breadcrumb {
+      min-width: 0;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+
+    .breadcrumb strong {
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
   }
 
   .preferences-controls {

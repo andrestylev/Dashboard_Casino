@@ -202,7 +202,7 @@ def update_game_status(
 ):
     row = db.execute(
         select(Game, GameCategory)
-        .join(GameCategory, Game.category_id == Game.id)
+        .join(GameCategory, Game.category_id == GameCategory.id)
         .where(Game.id == game_id)
         .with_for_update(of=Game)
     ).first()

@@ -69,6 +69,17 @@ def seed_management_records(conn):
         ),
         {"category_id": category_id},
     ).scalar_one()
+    if game_id == category_id:
+        alternate_category_id = conn.execute(
+            text(
+                "INSERT INTO game_categories (code, name) "
+                "VALUES ('phase6_alternate', 'Phase 6') RETURNING id"
+            )
+        ).scalar_one()
+        conn.execute(
+            text("UPDATE games SET category_id = :category_id WHERE id = :game_id"),
+            {"category_id": alternate_category_id, "game_id": game_id},
+        )
     session_id = conn.execute(
         text(
             "INSERT INTO game_sessions (player_id, game_id, device_type) "
@@ -155,6 +166,8 @@ def test_management_details_and_role_protected_status_updates(management_context
     assert changed_player.json()["status"] == "suspended"
     assert changed_player.json()["wallet_balance"] == "25.00"
     assert changed_game.json()["is_active"] is False
+    assert changed_game.json()["category_name"] == "Phase 6"
+    assert changed_game.json()["name"] == "Phase 6 Game"
     assert (
         conn.execute(
             text(

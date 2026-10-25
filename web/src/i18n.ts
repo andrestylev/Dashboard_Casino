@@ -315,6 +315,9 @@ const translations: Record<string, string> = {
   "Administrator audit log": "Registro de auditoría de administradores",
   "Read-only security history": "Historial de seguridad de solo lectura",
   "Loading records…": "Cargando registros…",
+  "Scroll heatmap by hour": "Desplazar el mapa de calor por hora",
+  "Table: {resource}": "Tabla: {resource}",
+  "Table: access requests": "Tabla: solicitudes de acceso",
 };
 
 export function translate(message: string, locale: Locale): string {

@@ -7,6 +7,8 @@ __pycache__/
 dist/
 !web/dist/
 node_modules/
+web/test-results/
+web/playwright-report/
 *.log
 packaging/windows/downloads/*.zip
 VC_redist.x64.exe

@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import type { FormEvent } from "react";
@@ -344,7 +345,7 @@ function PreferencesControls() {
   const { locale, setLocale, resolvedTheme, toggleTheme, t } = usePreferences();
   const targetTheme = resolvedTheme === "dark" ? "light" : "dark";
   return (
-    <div className="preferences-controls" aria-label={t("Display preferences")}>
+    <div className="preferences-controls" role="group" aria-label={t("Display preferences")}>
       <label className="language-select">
         <span className="visually-hidden">{t("Language")}</span>
         <select
@@ -364,7 +365,7 @@ function PreferencesControls() {
         title={t(`Switch to ${targetTheme} theme`)}
       >
         <span aria-hidden="true">{resolvedTheme === "dark" ? "☀" : "☾"}</span>
-        <span>{t(resolvedTheme === "dark" ? "Dark theme" : "Light theme")}</span>
+        <span>{t(`Switch to ${targetTheme} theme`)}</span>
       </button>
     </div>
   );
@@ -442,11 +443,10 @@ function LoginPage() {
               <p className="eyebrow">{t("Administrator access")}</p>
               <h2>{t(mode === "login" ? "Welcome back" : "Request an account")}</h2>
               <p className="muted">{t(mode === "login" ? "Sign in with your username and password." : "New accounts are created as support and need super-admin approval.")}</p>
-              <div className="auth-mode" role="tablist" aria-label={t("Sign-in method")}>
+              <div className="auth-mode" role="group" aria-label={t("Sign-in method")}>
                 <button
                   type="button"
-                  role="tab"
-                  aria-selected={mode === "login"}
+                  aria-pressed={mode === "login"}
                   className={mode === "login" ? "selected" : ""}
                   onClick={() => { setMode("login"); setError(""); }}
                 >
@@ -454,8 +454,7 @@ function LoginPage() {
                 </button>
                 <button
                   type="button"
-                  role="tab"
-                  aria-selected={mode === "register"}
+                  aria-pressed={mode === "register"}
                   className={mode === "register" ? "selected" : ""}
                   onClick={() => { setMode("register"); setError(""); }}
                 >
@@ -532,6 +531,21 @@ function ProtectedLayout() {
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const [signOutError, setSignOutError] = useState("");
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+
+  const closeNavigation = useCallback(() => {
+    setMenuOpen(false);
+    menuButtonRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") closeNavigation();
+    }
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [closeNavigation, menuOpen]);
 
   if (!admin) return <Navigate to="/login" state={{ from: location }} replace />;
 
@@ -551,7 +565,7 @@ function ProtectedLayout() {
       <aside className={`sidebar ${menuOpen ? "sidebar-open" : ""}`}>
         <Link to="/dashboard" className="brand-link"><Brand /></Link>
         <p className="nav-section-label">{t("WORKSPACE")}</p>
-        <nav aria-label={t("Main navigation")}>
+        <nav id="primary-navigation" aria-label={t("Main navigation")}>
           {navItems.map((item) => (
             <NavLink
               key={item.path}
@@ -596,10 +610,19 @@ function ProtectedLayout() {
           </button>
         </div>
       </aside>
-      {menuOpen && <button       aria-label={t("Close navigation")} className="sidebar-scrim" onClick={() => setMenuOpen(false)} />}
+      {menuOpen && <button aria-label={t("Close navigation")} className="sidebar-scrim" onClick={closeNavigation} />}
       <div className="main-shell">
         <header className="topbar">
-          <button className="menu-button" aria-label={t("Open navigation")} onClick={() => setMenuOpen(!menuOpen)}>☰</button>
+          <button
+            ref={menuButtonRef}
+            className="menu-button"
+            aria-label={t(menuOpen ? "Close navigation" : "Open navigation")}
+            aria-expanded={menuOpen}
+            aria-controls="primary-navigation"
+            onClick={() => setMenuOpen((open) => !open)}
+          >
+            ☰
+          </button>
           <div className="breadcrumb"><span>{t("Casino Demo")}</span><b>/</b><strong>{t(titleFromPath(location.pathname))}</strong></div>
           <div className="topbar-right"><span className="environment-pill"><span className="live-dot" /> {t("LOCAL DEMO")}</span><PreferencesControls /><span className="top-avatar">{admin.full_name.slice(0, 1).toUpperCase()}</span></div>
         </header>
@@ -1138,7 +1161,7 @@ function BetHeatmap({ cells }: { cells: DashboardHeatmapCell[] }) {
   return (
     <section className="chart-card">
       <div className="chart-heading"><div><h2>{t("Bet activity heatmap")}</h2><p>{t("All time · UTC weekday and hour")}</p></div></div>
-      <div className="heatmap-scroll">
+      <div className="heatmap-scroll" role="region" aria-label={t("Scroll heatmap by hour")} tabIndex={0}>
         <div className="heatmap-grid" role="grid" aria-label={t("Bet counts by weekday and UTC hour")}>
           <span className="heatmap-corner" />
           {Array.from({ length: 24 }, (_, hour) => <span className="heatmap-hour" key={hour}>{hour % 3 === 0 ? String(hour).padStart(2, "0") : ""}</span>)}
@@ -1237,7 +1260,12 @@ function AccessRequestsPage() {
           </div>
         </div>
         {error && <div className="table-error" role="alert">{error}</div>}
-        <div className="table-scroll">
+        <div
+          className="table-scroll"
+          role="region"
+          aria-label={t("Table: access requests")}
+          tabIndex={0}
+        >
           <table>
             <thead><tr><th>{t("Username")}</th><th>{t("Name")}</th><th>{t("Email")}</th><th>{t("Requested")}</th><th>{t("Action")}</th></tr></thead>
             <tbody>
@@ -1488,7 +1516,12 @@ function DataPage({ page }: { page: PageConfig }) {
         )}
         {error && <div className="table-error" role="alert"><span>{error}</span><button className="text-button" onClick={() => setReloadToken((value) => value + 1)}>{t("Retry")}</button></div>}
         {actionError && <div className="table-error" role="alert">{actionError}</div>}
-        <div className="table-scroll">
+        <div
+          className="table-scroll"
+          role="region"
+          aria-label={t("Table: {resource}").replace("{resource}", t(page.title.toLowerCase()))}
+          tabIndex={0}
+        >
           <table>
             <thead><tr>{page.columns.map((column) => <th key={column.key}>{t(column.label)}</th>)}{page.detailEndpoint && <th>{t("Details")}</th>}{["players", "games", "risk-alerts"].includes(page.resource) && <th>{t("Manage")}</th>}</tr></thead>
             <tbody>

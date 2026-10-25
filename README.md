@@ -15,6 +15,7 @@ with realistic mock data. Roles: `super_admin` and `support`, with username/pass
   data tables.
 - Phase 5 (done): live KPIs, player insights, daily/monthly trends and activity heatmap.
 - Phase 6 (done): filtered detail views, audited risk/player/game management and CSV export.
+- Phase 7 (done): query-plan review, responsive/accessibility improvements and browser E2E tests.
 
 The Windows packaging spike is preserved; the generated `web/dist/` is now the dashboard frontend.
 
@@ -139,6 +140,33 @@ CSV text cells are protected against spreadsheet formula injection, and download
   dashboard; there are no balance adjustments or financial write actions in this phase.
 - All management mutations are recorded in `audit_log`, and authorization is enforced by the API
   as well as by role-aware frontend controls.
+
+### Phase 7 performance, accessibility and responsive checks
+
+The dashboard's main aggregate and list queries were reviewed with PostgreSQL `EXPLAIN ANALYZE`
+against the seeded demo database. Existing date and registration indexes are used by the selective
+date-range queries. On this local sample, the 30-day bets aggregate took about 20 ms, daily GGR
+about 10 ms, all-time GGR about 19 ms, and the all-time activity heatmap about 42 ms. These are
+development measurements, not production benchmarks; no extra indexes were added because the
+observed plans and timings did not justify their write/storage cost.
+
+The frontend includes semantic labels and regions, visible keyboard focus, reduced-motion support,
+and a keyboard-operable responsive navigation menu. Playwright E2E tests check preference
+persistence, login/dashboard navigation, mobile overflow and navigation, and automated WCAG 2/2.1
+A/AA rules on login, dashboard (light and dark themes), and the mobile player table.
+
+Run the frontend checks from the repository root:
+
+```
+cd web
+npm ci
+npm exec playwright install chromium
+npm run build
+npm run test:e2e
+```
+
+The E2E tests mock API responses and run Vite locally, so they do not require the database or API
+containers. CI installs Chromium, builds the frontend and runs the same suite.
 
 New management routes:
 
