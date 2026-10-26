@@ -235,15 +235,30 @@ def test_list_endpoints_filter_and_paginate_and_audit_is_super_admin_only(conn, 
     assert api_client.get("/api/risk-alerts", params={"severity": "high"}).json()["total"] == 1
     assert api_client.get("/api/audit-log").status_code == 403
 
-    create_admin(conn, role_name="super_admin")
+    super_admin_id, _ = create_admin(conn, role_name="super_admin")
+    conn.execute(
+        text(
+            "INSERT INTO audit_log (admin_user_id, action, ip_address) "
+            "VALUES (:admin_id, 'test.ip_serialization', '192.0.2.10'::inet), "
+            "(:admin_id, 'test.ip_serialization', '2001:db8::10'::inet)"
+        ),
+        {"admin_id": super_admin_id},
+    )
     assert api_client.post("/api/auth/logout").status_code == 204
     response = api_client.post(
         "/api/auth/login",
         json={"username": "super_admin", "password": PASSWORD},
     )
     assert response.status_code == HTTP_200_OK
-    response = api_client.get("/api/audit-log", params={"page_size": 10})
+    response = api_client.get(
+        "/api/audit-log",
+        params={"page_size": 10, "action": "test.ip_serialization"},
+    )
     assert response.status_code == HTTP_200_OK
-    assert response.json()["total"] > 0
+    assert response.json()["total"] == 2
+    assert {item["ip_address"] for item in response.json()["items"]} == {
+        "192.0.2.10",
+        "2001:db8::10",
+    }
     assert api_client.get("/api/games", params={"page": 0}).status_code == 422
     assert api_client.get("/api/transactions", params={"page_size": 101}).status_code == 422

@@ -61,6 +61,21 @@ presentation use only.
 - [ ] Confirm the existing Python/PostgreSQL installations and services remain unchanged.
 - [ ] Try it on a real university PC if you can: some block unknown `.exe`/`.bat` (AppLocker).
 
+### Updating an existing portable demo
+
+To apply a project fix to a demo folder without losing its database:
+
+1. Stop the running demo and wait for the console to report that PostgreSQL stopped.
+2. Extract the new `casino-demo.zip` to a new folder.
+3. Copy the old demo folder's `data\` directory into the new folder. Do not copy the old `api\` or
+   `web\dist\` folders; those contain the stale application code.
+4. Start the new folder's `start.bat`. It reuses the copied database and does not reload the seed.
+5. After confirming the new version works, archive or remove the old folder.
+
+There is no need to regenerate `seed\casino_demo.sql` for an API-only fix. For Docker development,
+the API source is mounted into the container; restart/rebuild the API service if the code has not
+reloaded.
+
 ## 3. If something fails
 
 | Symptom | Likely cause |
@@ -90,3 +105,6 @@ The bundled database shut down cleanly after each run.
 This verifies the portable runtime and port-collision behavior locally, but is not a substitute for
 the final rehearsal in a separate clean VM with the network disconnected. Complete the checklist
 above on the presentation VM, as a standard Windows user, before the presentation.
+
+The Audit Log API also has regression coverage for database IPv4/IPv6 values in `ip_address`, and
+the portable bundle must be rebuilt after API changes so it contains the corrected response schema.

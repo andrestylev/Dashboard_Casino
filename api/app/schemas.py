@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, IPvAnyAddress, model_validator
 
 from app.models.enums import AlertStatus, PlayerStatus
 
@@ -136,7 +136,7 @@ class AuditRead(ORMRead):
     resource_type: str | None
     resource_id: str | None
     details: dict | None
-    ip_address: str | None
+    ip_address: IPvAnyAddress | None
     created_at: datetime
 
 
