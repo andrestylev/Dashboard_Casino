@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
-from sqlalchemy.exc import ProgrammingError, SQLAlchemyError
+from sqlalchemy.exc import SQLAlchemyError
 from starlette.exceptions import HTTPException
 from starlette.responses import Response
 from starlette.types import Scope
@@ -51,27 +51,27 @@ def health() -> dict:
 
 @app.get("/api/db-check")
 def db_check():
-    """Phase 0 spike: proves the API can reach PostgreSQL and that the seed was restored."""
+    """Prove the API can reach PostgreSQL and that demo records are present."""
     try:
         with engine.connect() as conn:
             version = conn.execute(text("select version()")).scalar_one()
-            try:
-                note = conn.execute(
-                    text("select note from spike_check order by id limit 1")
-                ).scalar_one_or_none()
-            except ProgrammingError:  # table missing -> seed not loaded
-                conn.rollback()
-                note = None
+            has_players, has_bets = conn.execute(
+                text(
+                    "select exists (select 1 from players), "
+                    "exists (select 1 from bets)"
+                )
+            ).one()
     except SQLAlchemyError as exc:
         return JSONResponse(
             status_code=503,
             content={"database": "error", "detail": str(exc.__cause__ or exc)},
         )
+    seed_loaded = has_players and has_bets
     return {
         "database": "ok",
         "version": version,
-        "seed_loaded": note is not None,
-        "seed_note": note,
+        "seed_loaded": seed_loaded,
+        "seed_note": "Player and bet records found." if seed_loaded else None,
     }
 
 

@@ -324,17 +324,17 @@ function App() {
     <PreferencesContext.Provider value={preferenceValues}>
       <AuthContext.Provider value={auth}>
         <Routes>
-        <Route path="/login" element={admin ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
-        <Route element={<ProtectedLayout />}>
-          <Route index element={<Navigate to="/dashboard" replace />} />
-          <Route path="dashboard" element={<DashboardPage />} />
-          {Object.keys(pages).filter((key) => key !== "audit-log").map((key) => (
-            <Route key={key} path={key} element={<DataPage page={pages[key]} />} />
-          ))}
-          <Route path="audit-log" element={<SuperAdminPage />} />
-          <Route path="access-requests" element={<AccessRequestsPage />} />
-        </Route>
-        <Route path="*" element={<Navigate to={admin ? "/dashboard" : "/login"} replace />} />
+          <Route path="/login" element={admin ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
+          <Route element={<ProtectedLayout />}>
+            <Route index element={<Navigate to="/dashboard" replace />} />
+            <Route path="dashboard" element={<DashboardPage />} />
+            {Object.keys(pages).filter((key) => key !== "audit-log").map((key) => (
+              <Route key={key} path={key} element={<DataPage page={pages[key]} />} />
+            ))}
+            <Route path="audit-log" element={<SuperAdminPage />} />
+            <Route path="access-requests" element={<AccessRequestsPage />} />
+          </Route>
+          <Route path="*" element={<Navigate to={admin ? "/dashboard" : "/login"} replace />} />
         </Routes>
       </AuthContext.Provider>
     </PreferencesContext.Provider>
@@ -727,7 +727,7 @@ function DashboardPage() {
         <div className="heading-meta"><span className="live-dot" /> {t("Live database · refreshes every 5 seconds")}</div>
       </div>
 
-      
+
 
       {error && <div className="dashboard-error" role="alert">{error}</div>}
       {loading && !metrics ? (
@@ -736,21 +736,14 @@ function DashboardPage() {
         <>
           <section className="date-range-group" aria-labelledby="range-group-title">
             <div className="dashboard-toolbar">
-        <div><strong>{t("Date range")}</strong><span>{t("All dashboard metrics use UTC dates")}</span></div>
-        <label>{t("From")}<input aria-label={t("Start date")} type="date" value={startDate} max={endDate} onChange={(event) => setStartDate(event.target.value)} /></label>
-        <label>{t("To")}<input aria-label={t("End date")} type="date" value={endDate} min={startDate} onChange={(event) => setEndDate(event.target.value)} /></label>
-        <label className="registration-period">{t("Registration period")}
-          <select aria-label={t("Registration channel period")} value={registrationMonths} onChange={(event) => setRegistrationMonths(event.target.value)}>
-            <option value="all">{t("All time")}</option>
-            <option value="1">{t("Last month")}</option>
-            <option value="3">{t("Last 3 months")}</option>
-            <option value="6">{t("Last 6 months")}</option>
-          </select>
-        </label>
-        <span className="last-updated">
-          {lastUpdated ? t("Updated {time}").replace("{time}", lastUpdated.toLocaleTimeString(locale)) : loading ? t("Loading metrics…") : t("Waiting for data")}
-        </span>
-      </div>
+              <div><strong>{t("Date range")}</strong><span>{t("All dashboard metrics use UTC dates")}</span></div>
+              <label>{t("From")}<input aria-label={t("Start date")} type="date" value={startDate} max={endDate} onChange={(event) => setStartDate(event.target.value)} /></label>
+              <label>{t("To")}<input aria-label={t("End date")} type="date" value={endDate} min={startDate} onChange={(event) => setEndDate(event.target.value)} /></label>
+
+              <span className="last-updated">
+                {lastUpdated ? t("Updated {time}").replace("{time}", lastUpdated.toLocaleTimeString(locale)) : loading ? t("Loading metrics…") : t("Waiting for data")}
+              </span>
+            </div>
             <div className="analytics-section-heading">
               <div>
                 <p className="eyebrow">{t("SELECTED PERIOD")}</p>
@@ -758,31 +751,31 @@ function DashboardPage() {
                 <p>{t("Cards and charts in this section use the date range above.")}</p>
               </div>
             </div>
-          <div className="metric-grid">
-            <MetricCard label={t("Gross gaming revenue")} value={formatMoney(metrics.ggr, locale)} detail={t("Stakes minus payouts")} accent="green" />
-            <MetricCard label={t("Completed deposits")} value={formatMoney(metrics.deposits, locale)} detail={t("Settled deposits in range")} accent="lime" />
-            <MetricCard label={t("Completed withdrawals")} value={formatMoney(metrics.withdrawals, locale)} detail={t("Settled withdrawals in range")} accent="blue" />
-            <MetricCard label={t("Active players")} value={metrics.active_players.toLocaleString(locale)} detail={t("Players with at least one bet")} accent="violet" />
-            <MetricCard label={t("Bets placed")} value={metrics.bets_count.toLocaleString(locale)} detail={t("All bets placed in range")} accent="orange" />
-          </div>
-          <div className="chart-grid">
-            <MetricChart
-              title={t("Daily gross gaming revenue")}
-              subtitle={t("Stake value minus payout by UTC day")}
-              daily={metrics.daily}
-              series={[{ key: "ggr", label: "GGR", color: "var(--chart-green)" }]}
-              signed
-            />
-            <MetricChart
-              title={t("Completed cash flow")}
-              subtitle={t("Settled deposits and withdrawals by UTC day")}
-              daily={metrics.daily}
-              series={[
-                { key: "deposits", label: t("Deposits"), color: "var(--chart-green)" },
-                { key: "withdrawals", label: t("Withdrawals"), color: "var(--chart-amber)" },
-              ]}
-            />
-          </div>
+            <div className="metric-grid">
+              <MetricCard label={t("Gross gaming revenue")} value={formatMoney(metrics.ggr, locale)} detail={t("Stakes minus payouts")} accent="green" />
+              <MetricCard label={t("Completed deposits")} value={formatMoney(metrics.deposits, locale)} detail={t("Settled deposits in range")} accent="lime" />
+              <MetricCard label={t("Completed withdrawals")} value={formatMoney(metrics.withdrawals, locale)} detail={t("Settled withdrawals in range")} accent="blue" />
+              <MetricCard label={t("Active players")} value={metrics.active_players.toLocaleString(locale)} detail={t("Players with at least one bet")} accent="violet" />
+              <MetricCard label={t("Bets placed")} value={metrics.bets_count.toLocaleString(locale)} detail={t("All bets placed in range")} accent="orange" />
+            </div>
+            <div className="chart-grid">
+              <MetricChart
+                title={t("Daily gross gaming revenue")}
+                subtitle={t("Stake value minus payout by UTC day")}
+                daily={metrics.daily}
+                series={[{ key: "ggr", label: "GGR", color: "var(--chart-green)" }]}
+                signed
+              />
+              <MetricChart
+                title={t("Completed cash flow")}
+                subtitle={t("Settled deposits and withdrawals by UTC day")}
+                daily={metrics.daily}
+                series={[
+                  { key: "deposits", label: t("Deposits"), color: "var(--chart-green)" },
+                  { key: "withdrawals", label: t("Withdrawals"), color: "var(--chart-amber)" },
+                ]}
+              />
+            </div>
           </section>
           <section className="all-time-group" aria-labelledby="all-time-group-title">
             <div className="analytics-section-heading">
@@ -793,21 +786,24 @@ function DashboardPage() {
               </div>
             </div>
             <div className="lifetime-metric">
+              
               <MetricCard label={t("Total GGR · all time")} value={formatMoney(metrics.all_time_ggr, locale)} detail={t("All bets since the start")} accent="violet" />
             </div>
-          <div className="insight-grid">
-            <RegistrationChannelChart
-              items={metrics.registration_channels}
-              total={metrics.registration_channels.reduce((sum, item) => sum + item.count, 0)}
-              period={metrics.registration_channel_period}
-            />
-            <DistributionChart title={t("Players by VIP tier")} subtitle={t("All registered players")} items={metrics.vip_tiers} />
-            <DistributionChart title={t("Players by current age")} subtitle={t("All registered players · current age")} items={metrics.age_bands} />
-          </div>
-          <div className="chart-grid extended-charts">
-            <MonthlyGGRChart items={metrics.monthly_ggr} />
-            <BetHeatmap cells={metrics.bet_heatmap} />
-          </div>
+            <div className="insight-grid">
+              <RegistrationChannelChart
+                items={metrics.registration_channels}
+                total={metrics.registration_channels.reduce((sum, item) => sum + item.count, 0)}
+                period={metrics.registration_channel_period}
+                registrationMonths={registrationMonths}
+                setRegistrationMonths={setRegistrationMonths}
+              />
+              <DistributionChart title={t("Players by VIP tier")} subtitle={t("All registered players")} items={metrics.vip_tiers} />
+              <DistributionChart title={t("Players by current age")} subtitle={t("All registered players · current age")} items={metrics.age_bands} />
+            </div>
+            <div className="chart-grid extended-charts">
+              <MonthlyGGRChart items={metrics.monthly_ggr} />
+              <BetHeatmap cells={metrics.bet_heatmap} />
+            </div>
           </section>
         </>
       )}
@@ -829,10 +825,11 @@ function MetricCard({
   const t = useT();
   return (
     <article className={`metric-card metric-${accent}`}>
+      
       <span className="metric-accent" />
       <p>{t(label)}</p>
       <strong>{value}</strong>
-      <small>{detail}</small>
+      <small>{t(detail)}</small>
     </article>
   );
 }
@@ -868,6 +865,7 @@ function MetricChart({
 
   return (
     <section className="chart-card">
+      
       <div className="chart-heading"><div><h2>{title}</h2><p>{subtitle}</p></div></div>
       <div className="chart-legend">
         {series.map((item) => <span key={item.key}><i style={{ backgroundColor: item.color }} />{item.label}</span>)}
@@ -979,10 +977,14 @@ function RegistrationChannelChart({
   items,
   total,
   period,
+  registrationMonths,
+  setRegistrationMonths,
 }: {
   items: DashboardDistributionItem[];
   total: number;
   period: string;
+  registrationMonths: string;
+  setRegistrationMonths: (value: string) => void;
 }) {
   const { locale } = usePreferences();
   const t = useT();
@@ -1002,6 +1004,14 @@ function RegistrationChannelChart({
   return (
     <section className="chart-card insight-card">
       <div className="chart-heading"><div><h2>{t("Players by registration channel")}</h2><p>{periodLabel} · {t("registration source, not login device")}</p></div></div>
+      <label className="registration-period">{t("Registration period")}
+                <select aria-label={t("Registration channel period")} value={registrationMonths} onChange={(event) => setRegistrationMonths(event.target.value)}>
+                  <option value="all">{t("All time")}</option>
+                  <option value="1">{t("Last month")}</option>
+                  <option value="3">{t("Last 3 months")}</option>
+                  <option value="6">{t("Last 6 months")}</option>
+                </select>
+              </label>
       <div className="donut-layout">
         <svg className="donut-chart" viewBox="0 0 120 120" role="img" aria-label={t("Registration channel percentages")}>
           <circle cx="60" cy="60" r={radius} fill="none" stroke="var(--chart-track)" strokeWidth="15" />
@@ -1171,22 +1181,22 @@ function BetHeatmap({ cells }: { cells: DashboardHeatmapCell[] }) {
               timeZone: "UTC",
             }).format(new Date(Date.UTC(2024, 0, weekday + 1)));
             return (
-            <div className="heatmap-row" role="row" key={day}>
-              <span className="heatmap-day" role="rowheader">{localizedDay}</span>
-              {Array.from({ length: 24 }, (_, hour) => {
-                const count = countsByTime.get(`${weekday}-${hour}`) ?? 0;
-                return (
-                  <span
-                    key={`${weekday}-${hour}`}
-                    className="heatmap-cell"
-                    role="gridcell"
-                    aria-label={`${localizedDay} ${String(hour).padStart(2, "0")}:00 UTC: ${count.toLocaleString(locale)} ${t("bets")}`}
-                    title={`${localizedDay} ${String(hour).padStart(2, "0")}:00 UTC · ${count.toLocaleString(locale)} ${t("bets")}`}
-                    style={{ backgroundColor: colorFor(count) }}
-                  />
-                );
-              })}
-            </div>
+              <div className="heatmap-row" role="row" key={day}>
+                <span className="heatmap-day" role="rowheader">{localizedDay}</span>
+                {Array.from({ length: 24 }, (_, hour) => {
+                  const count = countsByTime.get(`${weekday}-${hour}`) ?? 0;
+                  return (
+                    <span
+                      key={`${weekday}-${hour}`}
+                      className="heatmap-cell"
+                      role="gridcell"
+                      aria-label={`${localizedDay} ${String(hour).padStart(2, "0")}:00 UTC: ${count.toLocaleString(locale)} ${t("bets")}`}
+                      title={`${localizedDay} ${String(hour).padStart(2, "0")}:00 UTC · ${count.toLocaleString(locale)} ${t("bets")}`}
+                      style={{ backgroundColor: colorFor(count) }}
+                    />
+                  );
+                })}
+              </div>
             );
           })}
         </div>
@@ -1528,32 +1538,32 @@ function DataPage({ page }: { page: PageConfig }) {
               {loading && <tr><td className="table-state" colSpan={page.columns.length + extraColumns}><span className="spinner" /> {t("Loading records…")}</td></tr>}
               {!loading && result?.items.map((row, rowIndex) => (
                 <Fragment key={String(row.id ?? rowIndex)}>
-                <tr>
-                  {page.columns.map((column) => <td key={column.key}>{renderCell(row[column.key], column.kind, locale, t)}</td>)}
-                  {page.detailEndpoint && <td><button type="button" className="text-button" onClick={() => void toggleDetails(row)}>{t(expandedId === String(row.id) ? "Hide" : "View")}</button></td>}
-                  {["players", "games", "risk-alerts"].includes(page.resource) && (
-                    <td><RowActions
-                      page={page}
-                      row={row}
-                      role={admin?.role ?? "support"}
-                      busy={actionBusyId === String(row.id)}
-                      onAction={(action) => void performRowAction(row, action)}
-                      t={t}
-                    /></td>
-                  )}
-                </tr>
-                {expandedId === String(row.id) && (
-                  <tr key={`${String(row.id)}-details`}>
-                    <td colSpan={page.columns.length + extraColumns}>
-                      <div className="record-details">
-                        <h3>{t("Record details")}</h3>
-                        {detailLoadingId === String(row.id) && <p>{t("Loading details…")}</p>}
-                        {detailError && <p className="form-error" role="alert">{detailError}</p>}
-                        {details[String(row.id)] && <DetailFields record={details[String(row.id)]} locale={locale} t={t} />}
-                      </div>
-                    </td>
+                  <tr>
+                    {page.columns.map((column) => <td key={column.key}>{renderCell(row[column.key], column.kind, locale, t)}</td>)}
+                    {page.detailEndpoint && <td><button type="button" className="text-button" onClick={() => void toggleDetails(row)}>{t(expandedId === String(row.id) ? "Hide" : "View")}</button></td>}
+                    {["players", "games", "risk-alerts"].includes(page.resource) && (
+                      <td><RowActions
+                        page={page}
+                        row={row}
+                        role={admin?.role ?? "support"}
+                        busy={actionBusyId === String(row.id)}
+                        onAction={(action) => void performRowAction(row, action)}
+                        t={t}
+                      /></td>
+                    )}
                   </tr>
-                )}
+                  {expandedId === String(row.id) && (
+                    <tr key={`${String(row.id)}-details`}>
+                      <td colSpan={page.columns.length + extraColumns}>
+                        <div className="record-details">
+                          <h3>{t("Record details")}</h3>
+                          {detailLoadingId === String(row.id) && <p>{t("Loading details…")}</p>}
+                          {detailError && <p className="form-error" role="alert">{detailError}</p>}
+                          {details[String(row.id)] && <DetailFields record={details[String(row.id)]} locale={locale} t={t} />}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
                 </Fragment>
               ))}
               {!loading && result?.items.length === 0 && (

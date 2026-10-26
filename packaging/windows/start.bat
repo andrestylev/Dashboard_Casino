@@ -4,8 +4,6 @@ cd /d "%~dp0"
 
 set "PGBIN=%~dp0pgsql\bin"
 set "PGDATA=%~dp0data"
-set "PGPORT=55432"
-set "API_PORT=8000"
 
 echo ==========================================
 echo  Casino Admin - local demo
@@ -19,6 +17,23 @@ if not exist "%~dp0python\python.exe" (
   echo [ERROR] python\python.exe not found. Is the zip fully extracted?
   goto :fail
 )
+if not exist "%~dp0find_free_port.ps1" (
+  echo [ERROR] find_free_port.ps1 not found. Is the zip fully extracted?
+  goto :fail
+)
+
+REM Select local ports without interfering with PostgreSQL or API services already on the PC.
+for /f "usebackq delims=" %%P in (`powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0find_free_port.ps1" -StartPort 55432 -EndPort 55532`) do set "PGPORT=%%P"
+if not defined PGPORT (
+  echo [ERROR] No free local PostgreSQL port found between 55432 and 55532.
+  goto :fail
+)
+for /f "usebackq delims=" %%P in (`powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0find_free_port.ps1" -StartPort 8000 -EndPort 8099`) do set "API_PORT=%%P"
+if not defined API_PORT (
+  echo [ERROR] No free local API port found between 8000 and 8099.
+  goto :fail
+)
+echo Using PostgreSQL port %PGPORT% and API port %API_PORT%.
 
 REM --- 1. Create the database cluster (first run only) ---
 if not exist "%PGDATA%\PG_VERSION" (
@@ -79,5 +94,6 @@ exit /b 0
 :fail
 echo.
 echo Something went wrong. Check initdb.log, postgres.log and seed.log in this folder.
+"%PGBIN%\pg_ctl.exe" -D "%PGDATA%" -m fast stop >nul 2>&1
 pause
 exit /b 1

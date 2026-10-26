@@ -1022,9 +1022,9 @@ a {
 
 .metric-accent {
   position: absolute;
-  inset: 0 auto 0 0;
+  inset: 0px auto 0px 0px;
   width: 3px;
-  background: #438356;
+  background: #089633;
 }
 
 .metric-lime .metric-accent {
@@ -1036,7 +1036,7 @@ a {
 }
 
 .metric-violet .metric-accent {
-  background: #8d7cc0;
+  background: #6046ae;
 }
 
 .metric-orange .metric-accent {
@@ -1082,10 +1082,21 @@ a {
 .chart-heading {
   display: flex;
   align-items: flex-start;
+  margin-left: 1px;
   justify-content: space-between;
+  margin-bottom: 17px;
   gap: 12px;
-}
 
+}
+.registration-period {
+  display: flex;
+  align-items: center;
+  
+  gap: 6px;
+  padding: 10px 15px;
+  font-size: 12px;
+  font: 700 12px "Segoe UI", sans-serif;
+}
 .chart-heading h2 {
   margin: 0;
   color: #344238;

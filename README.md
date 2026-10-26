@@ -16,8 +16,10 @@ with realistic mock data. Roles: `super_admin` and `support`, with username/pass
 - Phase 5 (done): live KPIs, player insights, daily/monthly trends and activity heatmap.
 - Phase 6 (done): filtered detail views, audited risk/player/game management and CSV export.
 - Phase 7 (done): query-plan review, responsive/accessibility improvements and browser E2E tests.
+- Phase 8 (in progress): final portable Windows bundle and presentation rehearsal.
 
-The Windows packaging spike is preserved; the generated `web/dist/` is now the dashboard frontend.
+The Windows packaging spike is preserved; Phase 8 updates it with the current application and a
+rehearsed presentation package.
 
 ## Layout
 
@@ -60,6 +62,13 @@ npm run dev
 Vite proxies `/api` requests to `http://localhost:8000` by default. To build the static app served by
 FastAPI at `http://localhost:8000`, run `npm run build` from `web/`; the output is `web/dist/`.
 The frontend uses local system fonts and does not require internet access.
+
+The portable Windows ZIP serves this compiled frontend from FastAPI; it does not start Vite, so it
+does not hot-reload changes made after the ZIP was built. `packaging/windows/build_bundle.ps1`
+automatically runs the frontend build before creating a fresh ZIP. After editing the UI, run that
+script and copy/extract the newly generated `dist/casino-demo.zip` to the presentation PC. Node.js
+and npm are needed on the build machine only, not on the presentation PC. For live UI changes during
+development, use `docker compose up --build` and open `http://localhost:5173`.
 
 ### Phase 4 frontend
 
@@ -265,4 +274,8 @@ pytest                      # schema and seed tests need PostgreSQL: set TEST_DA
 
 ## Present on another PC
 
-See [packaging/windows/README.md](packaging/windows/README.md).
+See [packaging/windows/README.md](packaging/windows/README.md) for building and running the
+self-contained Windows package. The presentation account `andres.molina` uses the default demo
+password `Demo-Casino-2026!`; credentials and data are fictional. The bundle uses its own Python and
+PostgreSQL binaries and selects free local ports, so preinstalled versions do not need to be changed
+or stopped and no administrator permission is required.

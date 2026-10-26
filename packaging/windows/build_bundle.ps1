@@ -1,7 +1,10 @@
 <#
 Builds dist\casino-demo.zip, the portable Windows bundle (no installation, no admin needed to run it).
 
-One-time prerequisites, saved in packaging\windows\downloads\ :
+Build-machine prerequisites:
+  - Node.js/npm and the web dependencies installed once with `cd web; npm ci`.
+  - A normal Python 3.12, used only to download Windows wheels.
+  - Python and PostgreSQL portable archives saved in packaging\windows\downloads\:
   1) Python "Windows embeddable package (64-bit)" for the SAME minor version as the
      Python used here (e.g. python-3.12.x-embed-amd64.zip)  -> https://www.python.org/downloads/windows/
   2) PostgreSQL "Windows x86-64 binaries (zip)" from EnterpriseDB
@@ -31,6 +34,32 @@ if (-not $RuntimeDir) {
 $root      = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $downloads = Join-Path $PSScriptRoot "downloads"
 
+$npm = Get-Command npm.cmd -ErrorAction SilentlyContinue
+if (-not $npm) {
+  throw "Node.js and npm are required to build the latest frontend. Install Node.js on the build machine and retry."
+}
+
+Write-Host "[1/7] Building the latest frontend with Vite ..."
+Push-Location (Join-Path $root "web")
+try {
+  & $npm.Source run build
+  if ($LASTEXITCODE -ne 0) {
+    throw "Frontend build failed (exit code $LASTEXITCODE). If dependencies are missing, run 'npm ci' in the web folder, then retry."
+  }
+} finally {
+  Pop-Location
+}
+
+foreach ($required in @(
+  (Join-Path $root "web\dist\index.html"),
+  (Join-Path $root "seed\casino_demo.sql"),
+  (Join-Path $PSScriptRoot "find_free_port.ps1")
+)) {
+  if (-not (Test-Path $required -PathType Leaf)) {
+    throw "Required bundle input not found: $required. Prepare the demo SQL dump and confirm the frontend build succeeded."
+  }
+}
+
 function Find-Zip($explicit, $pattern, $label) {
   if ($explicit) { return (Resolve-Path $explicit).Path }
   $f = Get-ChildItem $downloads -Filter $pattern -ErrorAction SilentlyContinue |
@@ -54,10 +83,10 @@ $bundle = Join-Path $dist "casino-demo"
 if (Test-Path $bundle) { Remove-Item $bundle -Recurse -Force }
 New-Item -ItemType Directory -Path $bundle | Out-Null
 
-Write-Host "[1/6] Extracting embeddable Python $pyDot ..."
+Write-Host "[2/7] Extracting embeddable Python $pyDot ..."
 Expand-Archive -Path $PythonZip -DestinationPath (Join-Path $bundle "python")
 
-Write-Host "[2/6] Downloading dependencies for Windows x64 / Python $pyDot ..."
+Write-Host "[3/7] Downloading dependencies for Windows x64 / Python $pyDot ..."
 $site = Join-Path $bundle "python\Lib\site-packages"
 New-Item -ItemType Directory -Path $site -Force | Out-Null
 & $HostPython -m pip install -r (Join-Path $root "api\requirements.txt") `
@@ -65,13 +94,13 @@ New-Item -ItemType Directory -Path $site -Force | Out-Null
     --python-version $pyDot --implementation cp --abi "cp$pyTag" --no-warn-script-location
 if ($LASTEXITCODE -ne 0) { throw "pip install failed." }
 
-Write-Host "[3/6] Configuring the embeddable Python search paths ..."
+Write-Host "[4/7] Configuring the embeddable Python search paths ..."
 $pth = Get-ChildItem (Join-Path $bundle "python") -Filter "python*._pth" | Select-Object -First 1
 if (-not $pth) { throw "python*._pth not found: is this really the embeddable package?" }
 @("python$pyTag.zip", ".", "Lib\site-packages", "..\api", "import site") |
     Set-Content -Path $pth.FullName -Encoding ASCII
 
-Write-Host "[4/6] Extracting PostgreSQL binaries ..."
+Write-Host "[5/7] Extracting PostgreSQL binaries ..."
 Expand-Archive -Path $PostgresZip -DestinationPath $bundle
 if (-not (Test-Path (Join-Path $bundle "pgsql\bin\pg_ctl.exe"))) {
   throw "pgsql\bin\pg_ctl.exe not found after extraction (unexpected zip layout)."
@@ -98,7 +127,7 @@ if (($copied -notcontains "vcruntime140.dll") -or ($copied -notcontains "msvcp14
 }
 Write-Host "      runtime DLLs bundled: $($copied -join ', ')"
 
-Write-Host "[5/6] Copying the application ..."
+Write-Host "[6/7] Copying the application ..."
 New-Item -ItemType Directory -Path (Join-Path $bundle "api") | Out-Null
 Copy-Item (Join-Path $root "api\app") (Join-Path $bundle "api\app") -Recurse
 Get-ChildItem (Join-Path $bundle "api") -Recurse -Directory -Filter "__pycache__" |
@@ -106,20 +135,23 @@ Get-ChildItem (Join-Path $bundle "api") -Recurse -Directory -Filter "__pycache__
 New-Item -ItemType Directory -Path (Join-Path $bundle "web") | Out-Null
 Copy-Item (Join-Path $root "web\dist") (Join-Path $bundle "web\dist") -Recurse
 Copy-Item (Join-Path $root "seed") (Join-Path $bundle "seed") -Recurse
-foreach ($f in @("start.bat", "stop.bat", "open_when_ready.bat")) {
+foreach ($f in @("start.bat", "stop.bat", "open_when_ready.bat", "find_free_port.ps1")) {
   Copy-Item (Join-Path $PSScriptRoot $f) $bundle
 }
 @(
   "Casino Admin - local demo",
   "",
   "1. Double-click start.bat (first run takes a few seconds).",
-  "2. The browser opens at http://localhost:8000.",
+  "2. The browser opens at the local URL printed by start.bat.",
+  "   A free local port is selected automatically.",
   "3. To quit: close the black window, or run stop.bat.",
   "",
-  "Tip: keep this folder in a path without spaces or accents."
+  "Demo super-admin username: andres.molina",
+  "Demo password: Demo-Casino-2026!",
+  "These credentials and data are fictional; local demo use only."
 ) | Set-Content -Path (Join-Path $bundle "README.txt") -Encoding ASCII
 
-Write-Host "[6/6] Creating the zip ..."
+Write-Host "[7/7] Creating the zip ..."
 $zip = Join-Path $dist "casino-demo.zip"
 if (Test-Path $zip) { Remove-Item $zip -Force }
 Compress-Archive -Path $bundle -DestinationPath $zip
