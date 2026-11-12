@@ -37,7 +37,8 @@ Run it on a clean place, ideally a standard (non-admin) Windows user or a PC wit
 
 The bundle's `seed\casino_demo.sql` is a PostgreSQL dump containing the schema and fictional demo
 records. It is loaded by `start.bat` on the first run; the presentation PC does not need Alembic,
-Faker, or NumPy. The startup script checks for free loopback ports and selects a port in the
+Faker, or NumPy. A separate idempotent `seed\zzz_player_casino.sql` step adds the player login and
+demo-credit schema on both fresh and previously extracted bundles. The startup script checks for free loopback ports and selects a port in the
 configured range when the default is occupied. It never connects to or changes a separately
 installed PostgreSQL service. Regenerate the dump from the disposable export database as described
 in the repository README, then rebuild the bundle.
@@ -72,9 +73,10 @@ To apply a project fix to a demo folder without losing its database:
 4. Start the new folder's `start.bat`. It reuses the copied database and does not reload the seed.
 5. After confirming the new version works, archive or remove the old folder.
 
-There is no need to regenerate `seed\casino_demo.sql` for an API-only fix. For Docker development,
-the API source is mounted into the container; restart/rebuild the API service if the code has not
-reloaded.
+There is no need to regenerate `seed\casino_demo.sql` for an API-only fix. Schema updates for the
+portable bundle need an idempotent SQL script under `seed\` and a matching startup step; the
+PostgreSQL-backed development stack continues to use Alembic. For Docker development, the API source
+is mounted into the container; restart/rebuild the API service if the code has not reloaded.
 
 ## 3. If something fails
 

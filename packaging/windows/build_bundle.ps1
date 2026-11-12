@@ -53,6 +53,7 @@ try {
 foreach ($required in @(
   (Join-Path $root "web\dist\index.html"),
   (Join-Path $root "seed\casino_demo.sql"),
+  (Join-Path $root "seed\zzz_player_casino.sql"),
   (Join-Path $PSScriptRoot "find_free_port.ps1")
 )) {
   if (-not (Test-Path $required -PathType Leaf)) {

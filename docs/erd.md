@@ -14,11 +14,17 @@ erDiagram
   game_sessions ||--o{ bets : session_id
   players ||--o{ bonuses : player_id
   transactions |o--o| bonuses : transaction_id
+  players ||--o{ demo_credit_entries : player_id
+  demo_game_rounds |o--o{ demo_credit_entries : round_id
+  players ||--o| demo_credit_wallets : player_id
+  players ||--o{ demo_game_rounds : player_id
   games ||--o{ game_sessions : game_id
   players ||--o{ game_sessions : player_id
   game_categories ||--o{ games : category_id
+  players ||--o| player_credentials : player_id
   admin_users ||--o{ player_notes : admin_user_id
   players ||--o{ player_notes : player_id
+  players ||--o{ player_sessions : player_id
   admin_users |o--o{ risk_alerts : assigned_to_admin_id
   players ||--o{ risk_alerts : player_id
   admin_users |o--o{ transactions : created_by_admin_id
@@ -44,6 +50,7 @@ erDiagram
   }
   admin_users {
     bigint id PK
+    varchar username UK
     varchar email UK
     varchar password_hash
     varchar full_name
@@ -88,6 +95,32 @@ erDiagram
     timestamptz completed_at
     bigint transaction_id FK, UK
   }
+  demo_credit_entries {
+    bigint id PK
+    bigint player_id FK
+    int delta
+    varchar reason
+    uuid round_id FK
+    timestamptz created_at
+  }
+  demo_credit_wallets {
+    bigint player_id PK, FK
+    int balance
+    date last_refilled_on
+    timestamptz updated_at
+  }
+  demo_game_rounds {
+    uuid id PK
+    bigint player_id FK
+    varchar game_code
+    varchar status
+    int stake
+    jsonb state
+    jsonb outcome
+    timestamptz created_at
+    timestamptz updated_at
+    timestamptz completed_at
+  }
   game_categories {
     smallint id PK
     varchar code UK
@@ -116,12 +149,30 @@ erDiagram
     bool is_active
     date released_at
   }
+  player_credentials {
+    bigint player_id PK, FK
+    varchar password_hash
+    int failed_login_attempts
+    timestamptz locked_until
+    timestamptz last_login_at
+    timestamptz created_at
+  }
   player_notes {
     bigint id PK
     bigint player_id FK
     bigint admin_user_id FK
     text note
     timestamptz created_at
+  }
+  player_sessions {
+    uuid id PK
+    bigint player_id FK
+    varchar token_hash UK
+    timestamptz created_at
+    timestamptz expires_at
+    timestamptz revoked_at
+    inet ip_address
+    varchar user_agent
   }
   players {
     bigint id PK

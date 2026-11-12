@@ -17,6 +17,8 @@ with realistic mock data. Roles: `super_admin` and `support`, with username/pass
 - Phase 6 (done): filtered detail views, audited risk/player/game management and CSV export.
 - Phase 7 (done): query-plan review, responsive/accessibility improvements and browser E2E tests.
 - Phase 8 (in progress): final portable Windows bundle and presentation rehearsal.
+- Player casino MVP (done): separate player registration, demo-credit wallet, slots and
+  blackjack alongside (but isolated from) the administrative experience.
 
 The Windows packaging spike is preserved; Phase 8 updates it with the current application and a
 rehearsed presentation package.
@@ -34,15 +36,18 @@ seed/                PostgreSQL schema-and-data dump loaded on first run
 packaging/windows/   Portable bundle for presenting on a PC without admin rights
 docker-compose.yml   Dev stack: PostgreSQL + API + Vite with hot reload
 ```
-
+---------------
 ## Develop
-
+----------------------------------------------------
+-----------------------------------------------------
 ```
 docker compose up --build                       # http://localhost:5173 (live frontend)
                                                  # http://localhost:8000 (built app/API docs: /api/docs)
 docker compose run --rm api alembic upgrade head   # create/upgrade the schema
 docker compose run --rm api python -m pytest -q tests   # tests need the db service
 ```
+--------------------------------------------------------
+---------------------------------------------------------
 
 ### Frontend development
 
@@ -52,13 +57,15 @@ The container uses polling so source-file changes are detected reliably through 
 Windows. API requests to `/api` are proxied to the API service, keeping session cookies same-origin.
 
 To run Vite directly on the host instead:
-
+------------------------------------------------
+-----------------------------------------------
 ```
 cd web
 npm install
 npm run dev
 ```
-
+----------------------------------------------------------
+------------------------------------------------------------
 Vite proxies `/api` requests to `http://localhost:8000` by default. To build the static app served by
 FastAPI at `http://localhost:8000`, run `npm run build` from `web/`; the output is `web/dist/`.
 The frontend uses local system fonts and does not require internet access.
@@ -69,6 +76,29 @@ automatically runs the frontend build before creating a fresh ZIP. After editing
 script and copy/extract the newly generated `dist/casino-demo.zip` to the presentation PC. Node.js
 and npm are needed on the build machine only, not on the presentation PC. For live UI changes during
 development, use `docker compose up --build` and open `http://localhost:5173`.
+
+### Player casino demo
+
+The player experience lives under `http://localhost:5173/casino` (`/casino/login` and `/casino/register`) and uses its
+own `player_session` cookie and API routes under `/api/player`. It does not use administrator
+accounts, the existing cash wallet, or transaction records. Registration is open for adults only;
+the API validates the date of birth and starts each new account with 1,000 fictitious credits.
+Credits refill to at most 1,000 once per UTC day. Every credit movement is recorded in the separate
+`demo_credit_entries` ledger.
+
+The demo offers Lucky Lanterns and classic blackjack. Bets are 10–100 credits in increments of 10.
+Three matching slot symbols pay 2×, 3×, 5×, or 10× according to the symbol; blackjack pays 3:2 for
+a natural, 2:1 for a regular win, and returns the stake for a tie. A player may split once when
+their first two cards have equal value; split aces receive one card and stand. The dealer draws
+while below the highest non-busted player hand. All game state and outcomes are calculated by the
+API. The wallet balance is capped at 1,000 credits, and credits cannot be purchased, withdrawn, or
+exchanged for prizes or money.
+
+Apply the player-account schema with the normal migration command:
+
+```
+docker compose run --rm api alembic upgrade head
+```
 
 ### Phase 4 frontend
 

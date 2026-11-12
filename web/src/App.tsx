@@ -20,6 +20,7 @@ import {
   useNavigate,
 } from "react-router-dom";
 import { ApiError, apiDownload, apiRequest } from "./api";
+import PlayerExperience from "./PlayerExperience";
 import {
   getInitialLocale,
   getInitialTheme,
@@ -241,6 +242,8 @@ const navItems = [
 ];
 
 function App() {
+  const location = useLocation();
+  const isPlayerRoute = location.pathname.startsWith("/casino");
   const [admin, setAdmin] = useState<Admin | null>(null);
   const [checkingSession, setCheckingSession] = useState(true);
   const [locale, setLocale] = useState<Locale>(getInitialLocale);
@@ -312,7 +315,7 @@ function App() {
     [admin],
   );
 
-  if (checkingSession) {
+  if (checkingSession && !isPlayerRoute) {
     return (
       <PreferencesContext.Provider value={preferenceValues}>
         <div className="screen-loading"><span className="spinner" />{translate("Checking session", locale)}</div>
@@ -324,6 +327,7 @@ function App() {
     <PreferencesContext.Provider value={preferenceValues}>
       <AuthContext.Provider value={auth}>
         <Routes>
+          <Route path="/casino/*" element={<PlayerExperience />} />
           <Route path="/login" element={admin ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
           <Route element={<ProtectedLayout />}>
             <Route index element={<Navigate to="/dashboard" replace />} />

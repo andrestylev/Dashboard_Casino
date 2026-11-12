@@ -13,8 +13,9 @@ from app.models import Base
 
 EXPECTED_TABLES = {
     "admin_recovery_codes", "admin_sessions", "admin_users", "audit_log", "bets", "bonuses",
-    "game_categories", "game_sessions", "games", "player_notes", "players", "risk_alerts",
-    "roles", "transactions", "wallets",
+    "demo_credit_entries", "demo_credit_wallets", "demo_game_rounds", "game_categories",
+    "game_sessions", "games", "player_credentials", "player_notes", "player_sessions",
+    "players", "risk_alerts", "roles", "transactions", "wallets",
 }  # fmt: skip
 
 

@@ -12,6 +12,7 @@ from starlette.types import Scope
 from app.api.admin import router as admin_router
 from app.api.auth import router as auth_router
 from app.api.management import router as management_router
+from app.api.player_casino import router as player_casino_router
 from app.api.read import router as read_router
 from app.config import settings
 from app.db import engine
@@ -28,11 +29,12 @@ class SPAStaticFiles(StaticFiles):
         try:
             return await super().get_response(path, scope)
         except HTTPException as exc:
+            normalized_path = scope["path"].lstrip("/")
             if (
                 exc.status_code != 404
-                or path == "api"
-                or path.startswith("api/")
-                or Path(path).suffix
+                or normalized_path == "api"
+                or normalized_path.startswith("api/")
+                or Path(normalized_path).suffix
             ):
                 raise
             return await super().get_response("index.html", scope)
@@ -42,6 +44,7 @@ app.include_router(auth_router)
 app.include_router(admin_router)
 app.include_router(read_router)
 app.include_router(management_router)
+app.include_router(player_casino_router)
 
 
 @app.get("/api/health")

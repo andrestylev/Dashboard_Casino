@@ -38,6 +38,17 @@ async function mockApi(page: import("@playwright/test").Page) {
       await route.fulfill({ status: 401, json: { detail: "Authentication required" } });
       return;
     }
+    if (pathname === "/api/player/me" && request.method() === "GET") {
+      await route.fulfill({ status: 401, json: { detail: "Player authentication required" } });
+      return;
+    }
+    if (pathname === "/api/player/register" && request.method() === "POST") {
+      await route.fulfill({
+        status: 201,
+        json: { player: { id: 1, username: "demo.player", first_name: "Demo", balance: 1000 } },
+      });
+      return;
+    }
     if (pathname === "/api/auth/login" && request.method() === "POST") {
       await route.fulfill({ status: 200, json: { admin } });
       return;
@@ -110,6 +121,7 @@ test("mobile navigation supports Escape and reaches the player workspace", async
     localStorage.setItem("casino-dashboard-locale", "en");
     localStorage.setItem("casino-dashboard-theme", "light");
   });
+
   await page.goto("/login");
   await signIn(page);
 
@@ -148,6 +160,29 @@ test("mobile navigation supports Escape and reaches the player workspace", async
       targets: violation.nodes.map((node) => node.target),
     })),
   ).toEqual([]);
+});
+
+test("player casino lobby and age-gated registration are separate from admin login", async ({ page }) => {
+  await mockApi(page);
+  await page.goto("/casino");
+
+  await expect(page.getByRole("heading", { name: "Tu próxima partida empieza aquí." })).toBeVisible();
+  await page.getByRole("link", { name: "Jugar gratis" }).click();
+  await expect(page.getByRole("heading", { name: "Crear cuenta" })).toBeVisible();
+  await page.getByLabel("Nombre", { exact: true }).fill("Demo");
+  await page.getByLabel("Apellido").fill("Player");
+  await page.getByLabel("Correo electrónico").fill("demo@example.test");
+  await page.getByLabel("Nombre de usuario").fill("demo.player");
+  await page.getByLabel("Contraseña (mínimo 12 caracteres)").fill("player-password-123");
+  await page.getByLabel("Fecha de nacimiento").fill("1990-01-01");
+  await page.getByLabel("País (código ISO)").fill("ES");
+  await page.getByRole("checkbox", { name: "Confirmo que tengo 18 años o más." }).check();
+  await page.getByRole("button", { name: "Crear cuenta" }).click();
+
+  await expect(page.getByText("Hola, Demo")).toBeVisible();
+  await expect(page.getByText("1.000")).toBeVisible();
+  await page.getByRole("link", { name: "Tragamonedas", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Lucky Lanterns" })).toBeVisible();
 });
 
 test("login and dashboard have no automated WCAG 2 A/AA violations", async ({ page }) => {
