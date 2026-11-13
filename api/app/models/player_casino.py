@@ -1,5 +1,6 @@
 import uuid
 from datetime import date, datetime
+from decimal import Decimal
 
 from sqlalchemy import (
     BigInteger,
@@ -15,7 +16,8 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import INET, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.models.base import Base, TZDateTime, now_column
+from app.models.base import Base, Money, TZDateTime, enum_type, now_column
+from app.models.enums import VipTier
 
 
 class PlayerCredential(Base):
@@ -95,6 +97,63 @@ class DemoCreditEntry(Base):
     )
 
 
+class PlayerChipWallet(Base):
+    __tablename__ = "player_chip_wallets"
+
+    player_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("players.id", ondelete="CASCADE"), primary_key=True
+    )
+    balance: Mapped[int] = mapped_column(BigInteger, server_default=text("0"))
+    updated_at: Mapped[datetime] = now_column(on_update=True)
+
+    __table_args__ = (
+        CheckConstraint("balance >= 0 AND balance <= 10000000", name="balance_in_chip_range"),
+    )
+
+
+class PlayerChipEntry(Base):
+    __tablename__ = "player_chip_entries"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    player_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("players.id", ondelete="CASCADE")
+    )
+    delta: Mapped[int] = mapped_column(BigInteger)
+    reason: Mapped[str] = mapped_column(String(30))
+    round_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("demo_game_rounds.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = now_column()
+
+    __table_args__ = (
+        CheckConstraint("delta <> 0", name="delta_nonzero"),
+        CheckConstraint(
+            "reason IN ('migration', 'chip_purchase', 'wager', 'payout', 'refund')",
+            name="reason_allowed",
+        ),
+        Index("ix_player_chip_entries_player_created", "player_id", "created_at"),
+    )
+
+
+class PlayerVipSubscription(Base):
+    __tablename__ = "player_vip_subscriptions"
+
+    player_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("players.id", ondelete="CASCADE"), primary_key=True
+    )
+    tier: Mapped[VipTier] = mapped_column(enum_type(VipTier, "vip_subscription_tier"))
+    started_at: Mapped[datetime] = mapped_column(TZDateTime)
+    expires_at: Mapped[datetime] = mapped_column(TZDateTime)
+    amount: Mapped[Decimal] = mapped_column(Money)
+    updated_at: Mapped[datetime] = now_column(on_update=True)
+
+    __table_args__ = (
+        CheckConstraint("tier <> 'standard'", name="paid_tier_only"),
+        CheckConstraint("amount > 0", name="amount_positive"),
+        CheckConstraint("expires_at > started_at", name="expires_after_started"),
+    )
+
+
 class DemoGameRound(Base):
     __tablename__ = "demo_game_rounds"
 
@@ -114,7 +173,10 @@ class DemoGameRound(Base):
     completed_at: Mapped[datetime | None] = mapped_column(TZDateTime)
 
     __table_args__ = (
-        CheckConstraint("game_code IN ('slots', 'blackjack')", name="game_code_allowed"),
+        CheckConstraint(
+            "game_code IN ('slots', 'blackjack', 'roulette')",
+            name="game_code_allowed",
+        ),
         CheckConstraint(
             "status IN ('in_progress', 'completed', 'voided')", name="status_allowed"
         ),

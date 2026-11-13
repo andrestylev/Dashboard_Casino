@@ -21,10 +21,14 @@ erDiagram
   games ||--o{ game_sessions : game_id
   players ||--o{ game_sessions : player_id
   game_categories ||--o{ games : category_id
+  players ||--o{ player_chip_entries : player_id
+  demo_game_rounds |o--o{ player_chip_entries : round_id
+  players ||--o| player_chip_wallets : player_id
   players ||--o| player_credentials : player_id
   admin_users ||--o{ player_notes : admin_user_id
   players ||--o{ player_notes : player_id
   players ||--o{ player_sessions : player_id
+  players ||--o| player_vip_subscriptions : player_id
   admin_users |o--o{ risk_alerts : assigned_to_admin_id
   players ||--o{ risk_alerts : player_id
   admin_users |o--o{ transactions : created_by_admin_id
@@ -149,6 +153,19 @@ erDiagram
     bool is_active
     date released_at
   }
+  player_chip_entries {
+    bigint id PK
+    bigint player_id FK
+    bigint delta
+    varchar reason
+    uuid round_id FK
+    timestamptz created_at
+  }
+  player_chip_wallets {
+    bigint player_id PK, FK
+    bigint balance
+    timestamptz updated_at
+  }
   player_credentials {
     bigint player_id PK, FK
     varchar password_hash
@@ -173,6 +190,14 @@ erDiagram
     timestamptz revoked_at
     inet ip_address
     varchar user_agent
+  }
+  player_vip_subscriptions {
+    bigint player_id PK, FK
+    enum tier
+    timestamptz started_at
+    timestamptz expires_at
+    numeric amount
+    timestamptz updated_at
   }
   players {
     bigint id PK
@@ -224,6 +249,7 @@ erDiagram
     bigint created_by_admin_id FK
     varchar note
     inet ip_address
+    varchar origin
   }
   wallets {
     bigint player_id PK, FK
@@ -245,11 +271,19 @@ erDiagram
 
 - Identifiers: `bigint` identity keys (small lookup tables use `smallint`/`int`).
 - Money: `numeric(12,2)`; wallet balance `numeric(14,2)`.
-  One currency for the whole casino (not stored per row).
+  USD is simulated and capped at $500,000; Velvet Chips (VCH) use a separate integer ledger and
+  are capped at 10,000,000 per player.
 - Timestamps: `timestamptz`, UTC.
 - Enumerations: `varchar` + CHECK constraint (easier to migrate than native PostgreSQL enums).
 - `players` and `admin_users` are never deleted (deactivate/close instead); financial and gameplay
   foreign keys are `ON DELETE RESTRICT`.
+- `transactions` records USD activity and its origin; simulated player top-ups
+  are explicitly marked.
+  `player_chip_entries` records VCH purchases and game wagers/payouts independently.
+- `demo_credit_wallets` and `demo_credit_entries` are retained as legacy history; new accounts use
+  USD and VCH wallets and no longer receive daily demo-credit refills.
+- `player_vip_subscriptions` stores the current paid tier and expiry; transaction rows retain
+  purchase/renewal history.
 - `daily_game_stats` is a **materialized view** over `bets`; refresh it with
   `REFRESH MATERIALIZED VIEW CONCURRENTLY daily_game_stats;`.
 - Wallet is optional at the database level (`players ||--o| wallets`): the application creates one

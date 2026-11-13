@@ -17,6 +17,11 @@ from app.models.enums import (
     VipTier,
 )
 from app.models.games import Bet, Game, GameCategory, GameSession
+from app.models.player_casino import (
+    PlayerChipEntry,
+    PlayerChipWallet,
+    PlayerVipSubscription,
+)
 from app.models.players import Player, Transaction, Wallet
 from app.models.risk import RiskAlert
 from app.models.security import AuditLog
@@ -30,6 +35,7 @@ from app.schemas import (
     DashboardMonthlyGGR,
     GameRead,
     Page,
+    PlayerChipEntryRead,
     PlayerRead,
     RiskAlertRead,
     TransactionRead,
@@ -77,6 +83,14 @@ def distribution_items(
         )
         for key in labels
     ]
+
+
+def effective_vip_tier():
+    return case(
+        (PlayerVipSubscription.expires_at > func.now(), PlayerVipSubscription.tier),
+        (PlayerVipSubscription.player_id.is_not(None), VipTier.STANDARD.value),
+        else_=Player.vip_tier,
+    )
 
 
 @router.get("/dashboard/metrics", response_model=DashboardMetrics)
@@ -205,10 +219,16 @@ def dashboard_metrics(
         channel_total,
     )
 
+    current_vip_tier = effective_vip_tier()
     vip_counts = {
-        tier.value: count
+        VipTier(tier).value: count
         for tier, count in db.execute(
-            select(Player.vip_tier, func.count(Player.id)).group_by(Player.vip_tier)
+            select(current_vip_tier, func.count(Player.id))
+            .outerjoin(
+                PlayerVipSubscription,
+                PlayerVipSubscription.player_id == Player.id,
+            )
+            .group_by(current_vip_tier)
         ).all()
     }
     all_players = sum(vip_counts.values())
@@ -334,8 +354,9 @@ def list_players(
         filters.append(Player.status == status)
     if kyc_status is not None:
         filters.append(Player.kyc_status == kyc_status)
+    current_vip_tier = effective_vip_tier()
     if vip_tier is not None:
-        filters.append(Player.vip_tier == vip_tier)
+        filters.append(current_vip_tier == vip_tier.value)
     if country_code is not None:
         filters.append(Player.country_code == country_code.upper())
     if registered_after is not None:
@@ -343,34 +364,122 @@ def list_players(
     if registered_before is not None:
         filters.append(Player.registered_at <= registered_before)
 
-    base = select(Player).outerjoin(Wallet, Wallet.player_id == Player.id).where(*filters)
+    base = (
+        select(Player)
+        .outerjoin(Wallet, Wallet.player_id == Player.id)
+        .outerjoin(PlayerChipWallet, PlayerChipWallet.player_id == Player.id)
+        .outerjoin(
+            PlayerVipSubscription,
+            PlayerVipSubscription.player_id == Player.id,
+        )
+        .where(*filters)
+    )
     total = db.scalar(select(func.count()).select_from(base.subquery())) or 0
     offset, limit = page_bounds(page, page_size)
     rows = db.execute(
-        select(Player, Wallet.balance)
+        select(
+            Player,
+            Wallet.balance,
+            PlayerChipWallet.balance,
+            PlayerVipSubscription.expires_at,
+            current_vip_tier,
+        )
         .outerjoin(Wallet, Wallet.player_id == Player.id)
+        .outerjoin(PlayerChipWallet, PlayerChipWallet.player_id == Player.id)
+        .outerjoin(
+            PlayerVipSubscription,
+            PlayerVipSubscription.player_id == Player.id,
+        )
         .where(*filters)
         .order_by(Player.registered_at.desc(), Player.id.desc())
         .offset(offset)
         .limit(limit)
     )
     items = [
-        PlayerRead.model_validate(player).model_copy(update={"wallet_balance": balance})
-        for player, balance in rows
+        PlayerRead.model_validate(player).model_copy(
+            update={
+                "wallet_balance": balance,
+                "chip_balance": chip_balance or 0,
+                "vip_expires_at": expires_at if tier != VipTier.STANDARD.value else None,
+                "vip_tier": tier.value if isinstance(tier, VipTier) else tier,
+            }
+        )
+        for player, balance, chip_balance, expires_at, tier in rows
     ]
     return Page(items=items, total=total, page=page, page_size=page_size)
 
 
 @router.get("/players/{player_id}", response_model=PlayerRead)
 def get_player(player_id: int, db: DatabaseSession):
+    current_vip_tier = effective_vip_tier()
     row = db.execute(
-        select(Player, Wallet.balance)
+        select(
+            Player,
+            Wallet.balance,
+            PlayerChipWallet.balance,
+            PlayerVipSubscription.expires_at,
+            current_vip_tier,
+        )
         .outerjoin(Wallet, Wallet.player_id == Player.id)
+        .outerjoin(PlayerChipWallet, PlayerChipWallet.player_id == Player.id)
+        .outerjoin(
+            PlayerVipSubscription,
+            PlayerVipSubscription.player_id == Player.id,
+        )
         .where(Player.id == player_id)
     ).first()
     if row is None:
         raise HTTPException(status_code=404, detail="Player not found")
-    return PlayerRead.model_validate(row[0]).model_copy(update={"wallet_balance": row[1]})
+    player, balance, chip_balance, expires_at, tier = row
+    return PlayerRead.model_validate(player).model_copy(
+        update={
+            "wallet_balance": balance,
+            "chip_balance": chip_balance or 0,
+            "vip_expires_at": expires_at if tier != VipTier.STANDARD.value else None,
+            "vip_tier": tier.value if isinstance(tier, VipTier) else tier,
+        }
+    )
+
+
+@router.get("/chip-entries", response_model=Page[PlayerChipEntryRead])
+def list_chip_entries(
+    db: DatabaseSession,
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=PAGE_SIZE_MAX)] = 25,
+    player_id: int | None = None,
+    reason: Annotated[
+        str | None,
+        Query(pattern="^(migration|chip_purchase|wager|payout|refund)$"),
+    ] = None,
+    created_after: datetime | None = None,
+    created_before: datetime | None = None,
+):
+    filters = []
+    if player_id is not None:
+        filters.append(PlayerChipEntry.player_id == player_id)
+    if reason is not None:
+        filters.append(PlayerChipEntry.reason == reason)
+    if created_after is not None:
+        filters.append(PlayerChipEntry.created_at >= created_after)
+    if created_before is not None:
+        filters.append(PlayerChipEntry.created_at <= created_before)
+
+    base = select(PlayerChipEntry.id).where(*filters)
+    total = db.scalar(select(func.count()).select_from(base.subquery())) or 0
+    offset, limit = page_bounds(page, page_size)
+    entries = db.scalars(
+        select(PlayerChipEntry)
+        .where(*filters)
+        .order_by(PlayerChipEntry.created_at.desc(), PlayerChipEntry.id.desc())
+        .offset(offset)
+        .limit(limit)
+    ).all()
+    return Page(
+        items=[PlayerChipEntryRead.model_validate(entry) for entry in entries],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
 
 
 @router.get("/games", response_model=Page[GameRead])

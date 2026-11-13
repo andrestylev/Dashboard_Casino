@@ -37,8 +37,11 @@ Run it on a clean place, ideally a standard (non-admin) Windows user or a PC wit
 
 The bundle's `seed\casino_demo.sql` is a PostgreSQL dump containing the schema and fictional demo
 records. It is loaded by `start.bat` on the first run; the presentation PC does not need Alembic,
-Faker, or NumPy. A separate idempotent `seed\zzz_player_casino.sql` step adds the player login and
-demo-credit schema on both fresh and previously extracted bundles. The startup script checks for free loopback ports and selects a port in the
+Faker, or NumPy. A separate idempotent `seed\zzz_player_casino.sql` step adds player login, roulette support,
+the simulated USD wallet and VCH ledger, and VIP subscriptions on fresh and previously extracted
+bundles. Existing demo-credit balances are migrated 1:1 to VCH; new accounts start with empty
+wallets. No real payment information is collected or sent. The startup script checks for free
+loopback ports and selects a port in the
 configured range when the default is occupied. It never connects to or changes a separately
 installed PostgreSQL service. Regenerate the dump from the disposable export database as described
 in the repository README, then rebuild the bundle.

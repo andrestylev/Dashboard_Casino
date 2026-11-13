@@ -6,8 +6,11 @@ from app.models.player_casino import (
     DemoCreditEntry,
     DemoCreditWallet,
     DemoGameRound,
+    PlayerChipEntry,
+    PlayerChipWallet,
     PlayerCredential,
     PlayerSession,
+    PlayerVipSubscription,
 )
 from app.models.players import Bonus, Player, PlayerNote, Transaction, Wallet
 from app.models.risk import RiskAlert
@@ -24,6 +27,8 @@ __all__ = [
     "DemoCreditEntry",
     "DemoCreditWallet",
     "DemoGameRound",
+    "PlayerChipEntry",
+    "PlayerChipWallet",
     "Game",
     "GameCategory",
     "GameSession",
@@ -31,6 +36,7 @@ __all__ = [
     "PlayerCredential",
     "PlayerNote",
     "PlayerSession",
+    "PlayerVipSubscription",
     "RiskAlert",
     "Role",
     "Transaction",

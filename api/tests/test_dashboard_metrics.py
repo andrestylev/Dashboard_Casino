@@ -168,6 +168,30 @@ def test_dashboard_metrics_aggregate_and_fill_daily_dates(conn, metrics_client):
     ]
 
 
+def test_simulated_player_topups_are_in_deposit_metrics(conn, metrics_client):
+    seed_metrics_rows(conn)
+    now = datetime.now(UTC)
+    player_id = conn.execute(
+        text("SELECT id FROM players WHERE username = 'metrics_player_0'")
+    ).scalar_one()
+    conn.execute(
+        text(
+            "INSERT INTO transactions "
+            "(player_id, type, status, amount, method, created_at, completed_at, origin) "
+            "VALUES (:player_id, 'deposit', 'completed', 33, 'card', :now, :now, "
+            "'player_casino_demo')"
+        ),
+        {"player_id": player_id, "now": now},
+    )
+
+    response = metrics_client.get(
+        f"/api/dashboard/metrics?start_date={now.date()}&end_date={now.date()}"
+    )
+
+    assert response.status_code == 200
+    assert Decimal(response.json()["deposits"]) == Decimal("33.00")
+
+
 def test_dashboard_all_time_distributions_monthly_ggr_and_heatmap(conn, metrics_client):
     seed_metrics_rows(conn)
     today = datetime.now(UTC).date()

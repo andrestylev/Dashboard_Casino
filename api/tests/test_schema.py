@@ -1,9 +1,13 @@
 """Schema tests: constraints are enforced by PostgreSQL itself, not only by the app."""
 
 import uuid
+from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
+from alembic import command
 from alembic.autogenerate import compare_metadata
+from alembic.config import Config
 from alembic.migration import MigrationContext
 from sqlalchemy import inspect, text
 from sqlalchemy.exc import IntegrityError
@@ -14,7 +18,8 @@ from app.models import Base
 EXPECTED_TABLES = {
     "admin_recovery_codes", "admin_sessions", "admin_users", "audit_log", "bets", "bonuses",
     "demo_credit_entries", "demo_credit_wallets", "demo_game_rounds", "game_categories",
-    "game_sessions", "games", "player_credentials", "player_notes", "player_sessions",
+    "game_sessions", "games", "player_chip_entries", "player_chip_wallets",
+    "player_credentials", "player_notes", "player_sessions", "player_vip_subscriptions",
     "players", "risk_alerts", "roles", "transactions", "wallets",
 }  # fmt: skip
 
@@ -105,6 +110,56 @@ def test_models_match_migrations(engine):
         assert compare_metadata(ctx, Base.metadata) == []
 
 
+def test_economy_migration_preserves_usd_and_converts_legacy_credits(engine):
+    api_dir = Path(__file__).resolve().parents[1]
+    cfg = Config(str(api_dir / "alembic.ini"))
+    cfg.set_main_option("script_location", str(api_dir / "alembic"))
+    cfg.set_main_option(
+        "sqlalchemy.url",
+        engine.url.render_as_string(hide_password=False).replace("%", "%%"),
+    )
+    command.downgrade(cfg, "0004")
+    with engine.begin() as conn:
+        player_id = insert(
+            conn,
+            "INSERT INTO players (username, email, first_name, last_name, birth_date, "
+            "country_code, registration_channel) "
+            "VALUES ('migration_player', 'migration@example.test', 'Migration', 'Test', "
+            "'1990-01-01', 'CO', 'web') RETURNING id",
+        )
+        conn.execute(
+            text("INSERT INTO wallets (player_id, balance) VALUES (:p, 250)"),
+            {"p": player_id},
+        )
+        conn.execute(
+            text(
+                "INSERT INTO demo_credit_wallets (player_id, balance, last_refilled_on) "
+                "VALUES (:p, 777, :date)"
+            ),
+            {"p": player_id, "date": datetime.now(UTC).date()},
+        )
+
+    command.upgrade(cfg, "head")
+    with engine.begin() as conn:
+        assert conn.execute(
+            text("SELECT balance FROM wallets WHERE player_id = :p"),
+            {"p": player_id},
+        ).scalar_one() == 250
+        assert conn.execute(
+            text("SELECT balance FROM player_chip_wallets WHERE player_id = :p"),
+            {"p": player_id},
+        ).scalar_one() == 777
+        assert conn.execute(
+            text(
+                "SELECT delta, reason FROM player_chip_entries "
+                "WHERE player_id = :p"
+            ),
+            {"p": player_id},
+        ).one() == (777, "migration")
+        conn.execute(text("DELETE FROM wallets WHERE player_id = :p"), {"p": player_id})
+        conn.execute(text("DELETE FROM players WHERE id = :p"), {"p": player_id})
+
+
 # ---------- players, wallets, transactions --------------------------------------------------
 
 
@@ -128,6 +183,23 @@ def test_wallet_balance_cannot_be_negative(conn):
     violates(
         conn, "ck_wallets_balance_non_negative",
         "INSERT INTO wallets (player_id, balance) VALUES (:p, -1)", p=player,
+    )  # fmt: skip
+
+
+def test_wallet_balance_cannot_exceed_simulated_limit(conn):
+    player = make_player(conn)
+    violates(
+        conn, "ck_wallets_balance_maximum",
+        "INSERT INTO wallets (player_id, balance) VALUES (:p, 500000.01)", p=player,
+    )  # fmt: skip
+
+
+def test_chip_wallet_enforces_high_balance_limit(conn):
+    player = make_player(conn)
+    violates(
+        conn, "ck_player_chip_wallets_balance_in_chip_range",
+        "INSERT INTO player_chip_wallets (player_id, balance) VALUES (:p, 10000001)",
+        p=player,
     )  # fmt: skip
 
 

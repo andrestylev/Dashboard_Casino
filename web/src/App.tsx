@@ -117,6 +117,8 @@ const pages: Record<string, PageConfig> = {
       { key: "kyc_status", label: "KYC", kind: "status" },
       { key: "vip_tier", label: "VIP tier", kind: "status" },
       { key: "wallet_balance", label: "Wallet", kind: "money" },
+      { key: "chip_balance", label: "Chips (VCH)" },
+      { key: "vip_expires_at", label: "VIP expires", kind: "date" },
       { key: "registered_at", label: "Registered", kind: "date" },
     ],
   },
@@ -144,6 +146,36 @@ const pages: Record<string, PageConfig> = {
       { key: "is_active", label: "Availability", kind: "status" },
     ],
   },
+  "chip-entries": {
+    title: "Chip ledger",
+    description: "Auditable Velvet Chips movements, including game wagers and payouts.",
+    endpoint: "/api/chip-entries",
+    resource: "chip-entries",
+    exportable: false,
+    searchable: false,
+    filters: [
+      { key: "player_id", label: "Player ID", type: "number" },
+      {
+        key: "reason",
+        label: "Reason",
+        type: "select",
+        options: ["migration", "chip_purchase", "wager", "payout", "refund"].map((value) => ({
+          value,
+          label: value.replaceAll("_", " "),
+        })),
+      },
+      { key: "created_after", label: "Created from", type: "date" },
+      { key: "created_before", label: "Created to", type: "date" },
+    ],
+    columns: [
+      { key: "id", label: "Reference" },
+      { key: "player_id", label: "Player ID" },
+      { key: "delta", label: "Delta (VCH)" },
+      { key: "reason", label: "Reason", kind: "status" },
+      { key: "round_id", label: "Game round" },
+      { key: "created_at", label: "Created", kind: "date" },
+    ],
+  },
   transactions: {
     title: "Transactions",
     description: "Deposits, withdrawals and account adjustments.",
@@ -153,7 +185,7 @@ const pages: Record<string, PageConfig> = {
     detailEndpoint: (id) => `/api/transactions/${id}/detail`,
     filters: [
       { key: "player_id", label: "Player ID", type: "number" },
-      { key: "type", label: "Type", type: "select", options: ["deposit", "withdrawal", "bonus_credit", "adjustment"].map((value) => ({ value, label: value.replaceAll("_", " ") })) },
+      { key: "type", label: "Type", type: "select", options: ["deposit", "withdrawal", "bonus_credit", "adjustment", "chip_purchase", "vip_membership"].map((value) => ({ value, label: value.replaceAll("_", " ") })) },
       { key: "status", label: "Status", type: "select", options: ["pending", "completed", "failed", "cancelled"].map((value) => ({ value, label: value })) },
       { key: "created_after", label: "Created from", type: "date" },
       { key: "created_before", label: "Created to", type: "date" },
@@ -165,6 +197,7 @@ const pages: Record<string, PageConfig> = {
       { key: "status", label: "Status", kind: "status" },
       { key: "amount", label: "Amount", kind: "money" },
       { key: "method", label: "Method" },
+      { key: "origin", label: "Origin" },
       { key: "created_at", label: "Created", kind: "date" },
     ],
   },
@@ -235,6 +268,7 @@ const pages: Record<string, PageConfig> = {
 const navItems = [
   { path: "/dashboard", label: "Dashboard", icon: "▦" },
   { path: "/players", label: "Players", icon: "◉" },
+  { path: "/chip-entries", label: "Chip ledger", icon: "✦" },
   { path: "/games", label: "Games", icon: "▧" },
   { path: "/transactions", label: "Transactions", icon: "↗" },
   { path: "/bets", label: "Bets", icon: "⌁" },
@@ -757,7 +791,7 @@ function DashboardPage() {
             </div>
             <div className="metric-grid">
               <MetricCard label={t("Gross gaming revenue")} value={formatMoney(metrics.ggr, locale)} detail={t("Stakes minus payouts")} accent="green" />
-              <MetricCard label={t("Completed deposits")} value={formatMoney(metrics.deposits, locale)} detail={t("Settled deposits in range")} accent="lime" />
+              <MetricCard label={t("Completed deposits")} value={formatMoney(metrics.deposits, locale)} detail={t("Includes simulated player top-ups")} accent="lime" />
               <MetricCard label={t("Completed withdrawals")} value={formatMoney(metrics.withdrawals, locale)} detail={t("Settled withdrawals in range")} accent="blue" />
               <MetricCard label={t("Active players")} value={metrics.active_players.toLocaleString(locale)} detail={t("Players with at least one bet")} accent="violet" />
               <MetricCard label={t("Bets placed")} value={metrics.bets_count.toLocaleString(locale)} detail={t("All bets placed in range")} accent="orange" />
@@ -1331,6 +1365,7 @@ function DataPage({ page }: { page: PageConfig }) {
   const [actionBusyId, setActionBusyId] = useState<string | null>(null);
   const [actionError, setActionError] = useState("");
   const [reloadToken, setReloadToken] = useState(0);
+  const hasLoadedRef = useRef(false);
   const pageSize = 10;
 
   useEffect(() => {
@@ -1338,12 +1373,15 @@ function DataPage({ page }: { page: PageConfig }) {
     const params = new URLSearchParams({ page: String(currentPage), page_size: String(pageSize) });
     if (activeSearch.trim() && page.searchable) params.set("q", activeSearch.trim());
     addFiltersToParams(params, activeFilters);
-    setLoading(true);
+    if (!hasLoadedRef.current) setLoading(true);
     setError("");
     apiRequest<PageResult<Record<string, unknown>>>(`${page.endpoint}?${params}`, {
       signal: controller.signal,
     })
-      .then(setResult)
+      .then((pageResult) => {
+        setResult(pageResult);
+        hasLoadedRef.current = true;
+      })
       .catch((cause: unknown) => {
         if (cause instanceof DOMException && cause.name === "AbortError") return;
         if (cause instanceof ApiError && cause.status === 401) {
@@ -1355,6 +1393,15 @@ function DataPage({ page }: { page: PageConfig }) {
       .finally(() => setLoading(false));
     return () => controller.abort();
   }, [activeFilters, activeSearch, currentPage, page, reloadToken, setAdmin, t]);
+
+  useEffect(() => {
+    if (!["players", "transactions", "chip-entries"].includes(page.resource)) return;
+    const timer = window.setInterval(
+      () => setReloadToken((current) => current + 1),
+      5000,
+    );
+    return () => window.clearInterval(timer);
+  }, [page.resource]);
 
   const totalPages = Math.max(1, Math.ceil((result?.total ?? 0) / pageSize));
   const extraColumns = Number(Boolean(page.detailEndpoint))

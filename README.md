@@ -1,8 +1,8 @@
 # Panel de administración de casino
 
 Demo educativa y local de un panel de administración para un casino en línea y una experiencia de
-juego separada para jugadores. Utiliza datos ficticios y créditos de demostración; no es un servicio
-de apuestas con dinero real.
+juego separada para jugadores. Utiliza datos ficticios, una cartera USD simulada y fichas Velvet
+Chips (VCH); no es un servicio de apuestas con dinero real.
 
 **Tecnologías:** FastAPI, SQLAlchemy y PostgreSQL (API/base de datos); React, TypeScript y Vite
 (aplicación web).
@@ -40,6 +40,9 @@ tanto con una base nueva como con una existente):
 docker compose run --rm api alembic upgrade head
 ```
 
+Ejecuta también este comando después de actualizar el proyecto a una versión con migraciones nuevas.
+Aplica solo las revisiones pendientes y conserva los datos existentes.
+
 Abre la aplicación:
 
 | Página | URL |
@@ -57,8 +60,10 @@ Contraseña: Demo-Casino-2026!
 ```
 
 La demo para jugadores está separada: crea una cuenta para mayores de edad en `/casino/register`.
-Cada cuenta comienza con 1.000 créditos ficticios. No hay depósitos, retiros, compras ni premios
-canjeables.
+Cada cuenta nueva comienza con $0 y 0 Velvet Chips. En `/casino/wallet` puedes simular recargas de
+$1 a $50.000 por operación, comprar paquetes de fichas y adquirir una membresía VIP. No se conecta
+ningún procesador de pago ni se solicitan datos de tarjetas; los saldos no son dinero real y no se
+pueden retirar ni canjear.
 
 ### Detener, reiniciar y restablecer
 
@@ -111,8 +116,8 @@ docker-compose.yml   Entorno local de desarrollo con PostgreSQL, API y Vite
 ```
 
 El panel de administración incluye autenticación, análisis, tablas de jugadores/juegos/transacciones,
-gestión de riesgos e historial de auditoría. La demo para jugadores incluye registro, créditos
-ficticios, tragamonedas y blackjack. Consulta el [diagrama de la base de datos](docs/erd.md) y la
+gestión de riesgos e historial de auditoría. La demo para jugadores incluye registro, cartera USD,
+ficticios, tragamonedas, blackjack y ruleta europea. Consulta el [diagrama de la base de datos](docs/erd.md) y la
 [guía del paquete portable para Windows](packaging/windows/README.md).
 
 ## Desarrollo
@@ -160,22 +165,36 @@ durante el desarrollo, usa `docker compose up --build` y abre `http://localhost:
 ### Demo del casino para jugadores
 
 La experiencia para jugadores está en <http://localhost:5173/casino> (inicia sesión en
-<http://localhost:5173/casino/login> o regístrate en
-<http://localhost:5173/casino/register>). Utiliza su propia cookie `player_session` y rutas de API
-bajo `/api/player`. No usa las cuentas de administrador, la billetera de dinero existente ni los
-registros de transacciones. El registro es solo para personas adultas; la API valida la fecha de
-nacimiento y asigna 1.000 créditos ficticios a cada cuenta nueva. Una vez al día, según UTC, el saldo
-se recarga hasta un máximo de 1.000 créditos. Cada movimiento queda registrado en el ledger
-independiente `demo_credit_entries`.
+<http://localhost:5173/casino/login>, regístrate en <http://localhost:5173/casino/register> o abre
+la cartera en <http://localhost:5173/casino/wallet>). Utiliza su propia cookie `player_session` y
+rutas de API bajo `/api/player`, separadas de las cuentas administrativas. La API valida la mayoría
+de edad y crea una cartera USD y otra de VCH con saldo cero. Las recargas locales son simuladas,
+entre $1 y $50.000 por operación, y el saldo USD tiene un máximo de $500.000. El método seleccionado
+solo se guarda como referencia; nunca se envían ni guardan datos de pago.
 
-La demo ofrece Lucky Lanterns y blackjack clásico. Las apuestas van de 10 a 100 créditos, en
-incrementos de 10. Tres símbolos iguales en la tragamonedas pagan 2×, 3×, 5× o 10×, según el
-símbolo. En blackjack, un natural paga 3:2, una victoria normal paga 2:1 y un empate devuelve la
-apuesta. Se permite dividir una vez cuando las dos primeras cartas tienen el mismo valor; al
-dividir ases, cada mano recibe una carta y se planta automáticamente. El crupier pide cartas hasta
-igualar o superar la mano válida más alta. La API calcula todo el estado y los resultados de la
-partida. El saldo no puede superar 1.000 créditos, que no se pueden comprar, retirar ni canjear por
-premios o dinero.
+Los paquetes de fichas son de 100, 500, 1.000 y 5.000 VCH, con conversión base de $1 por 10 VCH. Los
+juegos solo apuestan VCH; el saldo de fichas tiene un máximo de 10.000.000. Las cuentas existentes
+con créditos demo convierten su saldo actual 1:1 a VCH durante la migración. No hay recarga diaria.
+La cartera registra transacciones USD y el ledger de fichas por separado. El panel de administración
+muestra ambos saldos, marca el origen de las operaciones en **Transacciones** y permite revisar
+apuestas, compras y premios VCH en **Chip ledger**. Las recargas simuladas también se incluyen en las
+métricas existentes de depósitos.
+
+Hay cinco niveles de membresía de 30 días: Standard gratis, Silver ($4,99; 2% de descuento en
+fichas), Gold ($14,99; 5%), Platinum ($39,99; 8%) y Diamond ($79,99; 12%). El descuento se aplica al
+comprar VCH. Renovar el mismo nivel extiende la vigencia; cambiar a otro nivel lo reemplaza de
+inmediato, sin prorrateo ni renovación automática. Los demás beneficios VIP son informativos.
+
+La demo ofrece Lucky Lanterns, blackjack clásico y ruleta europea (un solo cero, 0–36). Las apuestas
+van de 10 a 100 VCH, en incrementos de 10. En la ruleta se puede apostar a números (35:1),
+rojo/negro o par/impar (1:1), y docenas (2:1); el pago total incluye la apuesta y el cero hace perder
+las apuestas que no cubren el 0. Tres símbolos iguales en la tragamonedas pagan 2×, 3×, 5× o 10×,
+según el símbolo. En blackjack, un natural paga 3:2, una victoria normal paga 2:1 y un empate
+devuelve la apuesta. Se permite dividir una vez cuando las dos primeras cartas tienen el mismo valor;
+al dividir ases, cada mano recibe una carta y se planta automáticamente. El crupier pide cartas hasta
+igualar o superar la mano válida más alta. La API genera y liquida los resultados y conserva un ledger
+de fichas auditable. Las vistas de cartera del jugador y de finanzas administrativas se actualizan
+cada cinco segundos mientras están abiertas.
 
 ### Fase 4: frontend
 

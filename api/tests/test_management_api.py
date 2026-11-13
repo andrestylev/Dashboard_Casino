@@ -56,6 +56,17 @@ def seed_management_records(conn):
         text("INSERT INTO wallets (player_id, balance) VALUES (:player_id, 25)"),
         {"player_id": player_id},
     )
+    conn.execute(
+        text("INSERT INTO player_chip_wallets (player_id, balance) VALUES (:player_id, 375)"),
+        {"player_id": player_id},
+    )
+    conn.execute(
+        text(
+            "INSERT INTO player_chip_entries (player_id, delta, reason) "
+            "VALUES (:player_id, 375, 'migration')"
+        ),
+        {"player_id": player_id},
+    )
     category_id = conn.execute(
         text(
             "INSERT INTO game_categories (code, name) VALUES ('phase6', 'Phase 6') RETURNING id"
@@ -148,7 +159,13 @@ def test_management_details_and_role_protected_status_updates(management_context
         == 403
     )
     assert client.get(f"/api/games/{game_id}/detail").json()["name"] == "Phase 6 Game"
-    assert client.get(f"/api/transactions/{transaction_id}/detail").status_code == 200
+    transaction_detail = client.get(f"/api/transactions/{transaction_id}/detail")
+    assert transaction_detail.status_code == 200
+    assert transaction_detail.json()["origin"] == "seeded_demo"
+    chip_entries = client.get(f"/api/chip-entries?player_id={player_id}")
+    assert chip_entries.status_code == 200
+    assert chip_entries.json()["items"][0]["delta"] == 375
+    assert chip_entries.json()["items"][0]["reason"] == "migration"
     assert client.get(f"/api/bets/{bet_id}/detail").status_code == 200
     assert client.get(f"/api/risk-alerts/{alert_id}/detail").json()["details"] == {
         "count": 3
@@ -165,6 +182,7 @@ def test_management_details_and_role_protected_status_updates(management_context
     assert changed_player.status_code == changed_game.status_code == 200
     assert changed_player.json()["status"] == "suspended"
     assert changed_player.json()["wallet_balance"] == "25.00"
+    assert changed_player.json()["chip_balance"] == 375
     assert changed_game.json()["is_active"] is False
     assert changed_game.json()["category_name"] == "Phase 6"
     assert changed_game.json()["name"] == "Phase 6 Game"

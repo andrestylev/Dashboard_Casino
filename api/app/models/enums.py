@@ -40,6 +40,8 @@ class TransactionType(StrEnum):
     WITHDRAWAL = "withdrawal"
     BONUS_CREDIT = "bonus_credit"
     ADJUSTMENT = "adjustment"
+    CHIP_PURCHASE = "chip_purchase"
+    VIP_MEMBERSHIP = "vip_membership"
 
 
 class TransactionStatus(StrEnum):

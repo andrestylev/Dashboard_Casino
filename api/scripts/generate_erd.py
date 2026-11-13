@@ -80,11 +80,19 @@ How to read the crow's feet: look at the symbol **next to the other table**.
 
 - Identifiers: `bigint` identity keys (small lookup tables use `smallint`/`int`).
 - Money: `numeric(12,2)`; wallet balance `numeric(14,2)`.
-  One currency for the whole casino (not stored per row).
+  USD is simulated and capped at $500,000; Velvet Chips (VCH) use a separate integer ledger and
+  are capped at 10,000,000 per player.
 - Timestamps: `timestamptz`, UTC.
 - Enumerations: `varchar` + CHECK constraint (easier to migrate than native PostgreSQL enums).
 - `players` and `admin_users` are never deleted (deactivate/close instead); financial and gameplay
   foreign keys are `ON DELETE RESTRICT`.
+- `transactions` records USD activity and its origin; simulated player top-ups
+  are explicitly marked.
+  `player_chip_entries` records VCH purchases and game wagers/payouts independently.
+- `demo_credit_wallets` and `demo_credit_entries` are retained as legacy history; new accounts use
+  USD and VCH wallets and no longer receive daily demo-credit refills.
+- `player_vip_subscriptions` stores the current paid tier and expiry; transaction rows retain
+  purchase/renewal history.
 - `daily_game_stats` is a **materialized view** over `bets`; refresh it with
   `REFRESH MATERIALIZED VIEW CONCURRENTLY daily_game_stats;`.
 - Wallet is optional at the database level (`players ||--o| wallets`): the application creates one

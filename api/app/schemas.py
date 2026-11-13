@@ -1,5 +1,6 @@
 from datetime import date, datetime
 from decimal import Decimal
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, IPvAnyAddress, model_validator
 
@@ -51,6 +52,8 @@ class PlayerRead(ORMRead):
     deposit_limit_monthly: Decimal | None
     loss_limit_monthly: Decimal | None
     wallet_balance: Decimal | None = None
+    chip_balance: int = 0
+    vip_expires_at: datetime | None = None
 
 
 class GameRead(ORMRead):
@@ -79,6 +82,16 @@ class TransactionRead(ORMRead):
     external_ref: str | None
     created_by_admin_id: int | None
     note: str | None
+    origin: str
+
+
+class PlayerChipEntryRead(ORMRead):
+    id: int
+    player_id: int
+    delta: int
+    reason: str
+    round_id: UUID | None
+    created_at: datetime
 
 
 class BetRead(ORMRead):

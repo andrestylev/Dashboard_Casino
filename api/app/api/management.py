@@ -9,6 +9,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 
 from app.api.read import (
+    get_player,
     list_bets,
     list_games,
     list_players,
@@ -26,7 +27,7 @@ from app.models.enums import (
     VipTier,
 )
 from app.models.games import Bet, Game, GameCategory, GameSession
-from app.models.players import Player, Transaction, Wallet
+from app.models.players import Player, Transaction
 from app.models.risk import RiskAlert
 from app.schemas import (
     BetRead,
@@ -159,12 +160,7 @@ def update_player_status(
         )
 
     if player.status == body.status:
-        wallet_balance = db.scalar(
-            select(Wallet.balance).where(Wallet.player_id == player.id)
-        )
-        return PlayerRead.model_validate(player).model_copy(
-            update={"wallet_balance": wallet_balance}
-        )
+        return get_player(player.id, db)
 
     previous_status = player.status
     player.status = body.status
@@ -179,13 +175,8 @@ def update_player_status(
         details={"from": previous_status.value, "to": body.status.value},
     )
     db.flush()
-    wallet_balance = db.scalar(
-        select(Wallet.balance).where(Wallet.player_id == player.id)
-    )
     db.commit()
-    return PlayerRead.model_validate(player).model_copy(
-        update={"wallet_balance": wallet_balance}
-    )
+    return get_player(player.id, db)
 
 
 @router.patch(

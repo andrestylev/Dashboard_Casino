@@ -106,7 +106,10 @@ class Wallet(Base):
     balance: Mapped[Decimal] = mapped_column(Numeric(14, 2), server_default=text("0"))
     updated_at: Mapped[datetime] = now_column(on_update=True)
 
-    __table_args__ = (CheckConstraint("balance >= 0", name="balance_non_negative"),)
+    __table_args__ = (
+        CheckConstraint("balance >= 0", name="balance_non_negative"),
+        CheckConstraint("balance <= 500000", name="balance_maximum"),
+    )
 
 
 class Transaction(Base):
@@ -132,6 +135,7 @@ class Transaction(Base):
     )
     note: Mapped[str | None] = mapped_column(String(255))
     ip_address: Mapped[str | None] = mapped_column(INET)
+    origin: Mapped[str] = mapped_column(String(40), server_default=text("'seeded_demo'"))
 
     __table_args__ = (
         CheckConstraint("amount > 0", name="amount_positive"),
