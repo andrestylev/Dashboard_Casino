@@ -93,6 +93,7 @@ const ROULETTE_WHEEL_ORDER = [
   0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10,
   5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26,
 ];
+const SLOT_ROLL_SYMBOLS = ["🍒", "🍋", "🔔", "⭐", "🍇", "7️⃣"];
 
 const PlayerContext = createContext<PlayerContextValue | null>(null);
 
@@ -104,6 +105,10 @@ function usePlayer() {
 
 function messageFrom(error: unknown): string {
   return error instanceof Error ? error.message : "Ocurrió un error inesperado.";
+}
+
+function waitForAnimation(durationMs: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, durationMs));
 }
 
 function formatUsd(value: number | string): string {
@@ -753,15 +758,32 @@ function SlotsGame() {
   const [round, setRound] = useState<GameRound | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [revealedSymbols, setRevealedSymbols] = useState<string[] | null>(null);
+  const [revealedReels, setRevealedReels] = useState(0);
 
   async function spin() {
     setBusy(true);
     setError("");
+    setRound(null);
+    setRevealedSymbols(null);
+    setRevealedReels(0);
     try {
       const result = await apiRequest<{ round: GameRound; balance: number }>("/api/player/games/slots/spin", {
         method: "POST",
         body: JSON.stringify({ stake }),
       });
+      const symbols = result.round.symbols ?? ["✦", "✦", "✦"];
+      setRevealedSymbols(symbols);
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        setRevealedReels(symbols.length);
+      } else {
+        await waitForAnimation(260);
+        for (let index = 0; index < symbols.length; index += 1) {
+          setRevealedReels(index + 1);
+          if (index < symbols.length - 1) await waitForAnimation(320);
+        }
+        await waitForAnimation(260);
+      }
       setRound(result.round);
       if (player) setPlayer({ ...player, balance: result.balance, chip_balance: result.balance });
     } catch (spinError) {
@@ -775,9 +797,23 @@ function SlotsGame() {
     <GameShell title="Lucky Lanterns" subtitle="Tres símbolos iguales en línea para ganar.">
       <section className="player-table">
         <p className="player-game-rule">Premios triples: 🍒 2× · 🍋 3× · 🔔 5× · ⭐ 10×. Las apuestas y premios se liquidan en Velvet Chips (VCH).</p>
-        <div className={`slot-machine ${busy ? "slot-machine-spinning" : ""}`}>
+        <div className={`slot-machine ${busy ? "slot-machine-spinning" : ""} ${round?.outcome?.result === "win" ? "slot-machine-win" : ""}`}>
           <div className="slot-reels" aria-live="polite">
-            {(round?.symbols ?? ["✦", "✦", "✦"]).map((symbol, index) => <span className="slot-reel" key={`${index}-${symbol}`}>{symbol}</span>)}
+            {(round?.symbols ?? ["✦", "✦", "✦"]).map((symbol, index) => {
+              const isRevealed = busy && revealedReels > index;
+              const visibleSymbol = revealedSymbols?.[index] ?? symbol;
+              return (
+                <span className={`slot-reel ${isRevealed ? "slot-reel-stopped" : ""}`} key={index}>
+                  {busy && !isRevealed ? (
+                    <span className="slot-reel-strip" aria-hidden="true" style={{ animationDelay: `${index * 90}ms` }}>
+                      {[...SLOT_ROLL_SYMBOLS, ...SLOT_ROLL_SYMBOLS].map((rollingSymbol, symbolIndex) => (
+                        <span className="slot-reel-symbol" key={`${symbolIndex}-${rollingSymbol}`}>{rollingSymbol}</span>
+                      ))}
+                    </span>
+                  ) : <span className="slot-reel-face">{visibleSymbol}</span>}
+                </span>
+              );
+            })}
           </div>
           <div className="slot-lever" aria-hidden="true">
             <span className="slot-lever-arm" />
@@ -816,6 +852,7 @@ function RouletteGame() {
   const [bets, setBets] = useState<RouletteWager[]>([]);
   const [round, setRound] = useState<GameRound | null>(null);
   const [wheelRotation, setWheelRotation] = useState(0);
+  const [ballRotation, setBallRotation] = useState(0);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const totalStake = bets.reduce((total, bet) => total + bet.amount, 0);
@@ -856,8 +893,9 @@ function RouletteGame() {
       if (player) setPlayer({ ...player, balance: result.balance, chip_balance: result.balance });
       const wheelIndex = ROULETTE_WHEEL_ORDER.indexOf(result.round.winning_number ?? 0);
       setWheelRotation((Math.floor(wheelRotation / 360) + 6) * 360 - (wheelIndex + 0.5) * (360 / 37));
+      setBallRotation((Math.floor(Math.abs(ballRotation) / 360) + 6) * -360 + (wheelIndex + 0.5) * (360 / 37));
       const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      await new Promise((resolve) => window.setTimeout(resolve, reducedMotion ? 0 : 4300));
+      await waitForAnimation(reducedMotion ? 0 : 4300);
     } catch (spinError) {
       setError(messageFrom(spinError));
     } finally {
@@ -880,10 +918,17 @@ function RouletteGame() {
           <div className="roulette-wheel-stage">
             <span className="roulette-pointer" aria-hidden="true" />
             <div className="roulette-wheel" style={{ transform: `rotate(${wheelRotation}deg)`, background: wheelBackground }} aria-hidden="true">
+              <div className={`roulette-ball-track ${busy ? "roulette-ball-track-active" : ""}`} style={{ transform: `rotate(${ballRotation}deg)` }}>
+                <span className="roulette-ball" />
+              </div>
               <div className="roulette-wheel-labels">
                 {ROULETTE_WHEEL_ORDER.map((number, index) => (
                   <span
-                    className={number === 0 ? "roulette-number roulette-number-zero" : "roulette-number"}
+                    className={[
+                      "roulette-number",
+                      number === 0 ? "roulette-number-zero" : "",
+                      round?.winning_number === number && !busy ? "roulette-number-winner" : "",
+                    ].filter(Boolean).join(" ")}
                     key={number}
                     style={{
                       transform: `rotate(${(index + 0.5) * (360 / 37)}deg) translateY(-36cqw) rotate(${-(index + 0.5) * (360 / 37)}deg)`,
@@ -980,6 +1025,7 @@ function BlackjackGame() {
   const [round, setRound] = useState<GameRound | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [dealing, setDealing] = useState(false);
 
   async function reloadActiveRound() {
     try {
@@ -995,7 +1041,11 @@ function BlackjackGame() {
   }, []);
 
   async function perform(path: string, body?: object) {
+    const isStartingRound = path.endsWith("/start");
+    const isDealerDrawing = body !== undefined && "action" in body && body.action === "stand";
+    const animateDeal = isStartingRound || isDealerDrawing;
     setBusy(true);
+    setDealing(animateDeal);
     setError("");
     try {
       const result = await apiRequest<{ round: GameRound; balance: number }>(path, {
@@ -1004,10 +1054,14 @@ function BlackjackGame() {
       });
       setRound(result.round);
       if (player) setPlayer({ ...player, balance: result.balance, chip_balance: result.balance });
+      if (animateDeal && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        await waitForAnimation(isStartingRound ? 1400 : 900);
+      }
     } catch (actionError) {
       setError(messageFrom(actionError));
     } finally {
       setBusy(false);
+      setDealing(false);
     }
   }
 
@@ -1026,7 +1080,7 @@ function BlackjackGame() {
       <section className="player-table blackjack-table">
         <p className="player-game-rule">Blackjack natural paga 3:2. Se permite una división por ronda con cartas iniciales del mismo valor; los ases divididos reciben una carta y se plantan automáticamente. Empates devuelven la apuesta en VCH.</p>
         {round ? (
-          <div className="blackjack-board" aria-live="polite">
+          <div className={`blackjack-board ${dealing ? "blackjack-board-dealing" : ""}`} aria-live="polite">
             <div className="blackjack-hand blackjack-dealer"><span className="blackjack-label">CROUPIER</span><div className="blackjack-cards">{round.dealer_hand?.map((card, index) => <PlayingCard card={card} key={`${card}-${index}`} />)}</div>{round.outcome ? <span className="blackjack-score">Puntaje: {round.outcome.dealer_score}</span> : null}</div>
             <div className="blackjack-divider"><span>♣</span></div>
             {round.hands?.map((hand, index) => {
@@ -1042,7 +1096,7 @@ function BlackjackGame() {
                   <span className="blackjack-label">TU MANO {round.hands && round.hands.length > 1 ? index + 1 : ""}{hand.status !== "playing" && active ? ` · ${hand.status === "bust" ? "PASADA" : "PLANTADA"}` : ""}</span>
                   <div className="blackjack-cards">{hand.cards.map((card, cardIndex) => <PlayingCard card={card} key={`${card}-${cardIndex}`} />)}</div>
                   <span className="blackjack-score">Puntaje: {hand.cards.length ? handScore(hand.cards) : 0} · Apuesta: {hand.stake}</span>
-                  {handResult ? <span className={`blackjack-result blackjack-result-${resultTone}`}>{resultLabel} · {handResult.payout ? `+${handResult.payout}` : "0"} VCH</span> : null}
+                  {handResult && !busy ? <span className={`blackjack-result blackjack-result-${resultTone}`}>{resultLabel} · {handResult.payout ? `+${handResult.payout}` : "0"} VCH</span> : null}
                 </div>
               );
             })}
@@ -1050,7 +1104,7 @@ function BlackjackGame() {
         ) : (
           <div className="blackjack-welcome"><span aria-hidden="true">♠</span><h2>La mesa está lista</h2><p>Recibe dos cartas y juega tu mano contra el croupier.</p></div>
         )}
-        {round?.outcome ? (
+        {round?.outcome && !busy ? (
           <GameResultBanner
             tone={blackjackTone}
             title={blackjackTone === "win" ? (handResults.some((hand) => hand.result === "blackjack") ? "¡Blackjack!" : "¡Mano ganadora!") : blackjackTone === "draw" ? "Empate: tu apuesta vuelve a ti" : "Ronda finalizada"}

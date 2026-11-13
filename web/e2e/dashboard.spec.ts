@@ -140,6 +140,7 @@ async function mockApi(page: import("@playwright/test").Page) {
     }
     if (pathname === "/api/player/games/slots/spin" && request.method() === "POST") {
       const payload = request.postDataJSON() as { stake: number };
+      await new Promise((resolve) => setTimeout(resolve, 250));
       const won = slotSpins++ === 0;
       const payout = won ? 20 : 0;
       chipBalance += payout - payload.stake;
@@ -399,6 +400,7 @@ test("player casino lobby and age-gated registration are separate from admin log
   const slotStakeSelect = await page.getByLabel("Apuesta").boundingBox();
   expect(slotStakeSelect?.height ?? 0).toBeGreaterThanOrEqual(44);
   await page.getByRole("button", { name: "Girar rodillos" }).click();
+  await expect(page.locator(".slot-machine-spinning .slot-reel-strip").first()).toHaveCSS("animation-name", "slot-reel-spin");
   await expect(page.getByRole("status")).toContainText("¡Combinación ganadora!");
   await page.getByRole("button", { name: "Girar rodillos" }).click();
   await expect(page.getByRole("status")).toContainText("Esta vez no hubo premio");
@@ -414,9 +416,10 @@ test("player casino lobby and age-gated registration are separate from admin log
   await page.getByLabel("Selección").selectOption("red");
   await page.getByRole("button", { name: "Añadir a mis apuestas" }).click();
   await expect(page.locator(".roulette-wheel-caption")).toHaveCount(0);
-  await page.emulateMedia({ reducedMotion: "reduce" });
   await page.getByRole("button", { name: "Girar", exact: true }).click();
-  await expect(page.getByRole("status")).toContainText("17 · negro");
+  await expect(page.locator(".roulette-ball-track")).toHaveClass(/roulette-ball-track-active/);
+  await expect(page.getByRole("status")).toContainText("17 · negro", { timeout: 7000 });
+  await expect(page.locator(".roulette-number-winner")).toHaveText("17");
   await expect(page.locator(".roulette-outcome ul")).toContainText("Número 17: ganó");
   const rouletteScan = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
@@ -431,6 +434,7 @@ test("player casino lobby and age-gated registration are separate from admin log
   await page.getByRole("link", { name: "Blackjack", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Blackjack clásico" })).toBeVisible();
   await page.getByRole("button", { name: "Repartir" }).click();
+  await expect(page.locator(".blackjack-board-dealing .playing-card").first()).toHaveCSS("animation-name", "deal-card");
   await expect(page.getByRole("status")).toContainText("Empate: tu apuesta vuelve a ti");
   await expect(page.getByRole("img", { name: "10 de corazones" })).toBeVisible();
   const blackjackScan = await new AxeBuilder({ page })

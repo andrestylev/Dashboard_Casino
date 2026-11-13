@@ -1018,16 +1018,58 @@ a {
 }
 
 .slot-reel {
+  position: relative;
   display: grid;
   width: clamp(72px, 14vw, 115px);
   height: clamp(85px, 16vw, 130px);
   place-items: center;
+  overflow: hidden;
   border: 1px solid rgba(230, 199, 122, .48);
   border-radius: 10px;
   background: linear-gradient(150deg, #f5efdc, #c9bd9c);
   box-shadow: inset 0 0 0 6px rgba(69, 74, 56, .09), 0 12px 25px rgba(0, 0, 0, .25);
   color: #28372c;
   font-size: clamp(30px, 5vw, 48px);
+}
+
+.slot-reel::after {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(47, 42, 27, .3), transparent 25%, transparent 75%, rgba(47, 42, 27, .3));
+  content: "";
+  pointer-events: none;
+}
+
+.slot-reel-strip {
+  position: absolute;
+  inset: 0 0 auto;
+  display: grid;
+  height: 1200%;
+  grid-template-rows: repeat(12, minmax(0, 1fr));
+  animation: slot-reel-spin .62s linear infinite;
+}
+
+.slot-reel-symbol,
+.slot-reel-face {
+  display: grid;
+  place-items: center;
+  line-height: 1;
+}
+
+.slot-reel-symbol {
+  font-size: clamp(30px, 5vw, 48px);
+}
+
+.slot-reel-face {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+}
+
+.slot-reel-stopped .slot-reel-face {
+  animation: slot-reel-stop .26s cubic-bezier(.16, .86, .28, 1.18) both;
 }
 
 .slot-lever {
@@ -1087,21 +1129,23 @@ a {
   transform: translate(4px, 9px);
 }
 
-.slot-machine-spinning .slot-reel {
-  animation: slot-roll .72s cubic-bezier(.18, .72, .24, 1) infinite;
+.slot-machine-win .slot-reel {
+  animation: slot-win-celebrate .48s ease-in-out 2 alternate;
 }
 
-.slot-machine-spinning .slot-reel:nth-child(2) {
-  animation-delay: .12s;
+@keyframes slot-reel-spin {
+  from { transform: translateY(0); }
+  to { transform: translateY(-50%); }
 }
 
-.slot-machine-spinning .slot-reel:nth-child(3) {
-  animation-delay: .24s;
+@keyframes slot-reel-stop {
+  from { opacity: .5; transform: translateY(-12px) scale(.86); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-@keyframes slot-roll {
-  0%, 100% { transform: translateY(0) scale(1); filter: blur(0); }
-  45% { transform: translateY(-9px) scale(1.04); filter: blur(1.5px); }
+@keyframes slot-win-celebrate {
+  from { transform: translateY(0) scale(1); box-shadow: inset 0 0 0 6px rgba(69, 74, 56, .09), 0 12px 25px rgba(0, 0, 0, .25); }
+  to { transform: translateY(-5px) scale(1.05); box-shadow: inset 0 0 0 6px rgba(248, 223, 152, .18), 0 0 26px rgba(241, 209, 119, .48); }
 }
 
 .game-result {
@@ -1262,6 +1306,12 @@ a {
 .blackjack-hand-current {
   border-color: rgba(230, 199, 122, .55);
   background: rgba(10, 20, 13, .2);
+  animation: blackjack-turn-highlight 1.8s ease-in-out infinite alternate;
+}
+
+@keyframes blackjack-turn-highlight {
+  from { border-color: rgba(230, 199, 122, .3); box-shadow: 0 0 0 rgba(230, 199, 122, 0); }
+  to { border-color: rgba(243, 217, 144, .85); box-shadow: 0 0 20px rgba(230, 199, 122, .12); }
 }
 
 .blackjack-dealer {
@@ -1294,6 +1344,8 @@ a {
   background: linear-gradient(145deg, #fffefa, #e8e2d2 68%, #d2c8b3);
   box-shadow: 0 7px 15px rgba(0, 0, 0, .34), inset 0 0 0 2px rgba(255, 255, 255, .66);
   color: #252a25;
+  backface-visibility: hidden;
+  transform-style: preserve-3d;
 }
 
 .playing-card-red {
@@ -1403,17 +1455,20 @@ a {
 }
 
 .playing-card {
-  animation: deal-card .32s ease-out both;
+  animation: deal-card .38s cubic-bezier(.18, .75, .25, 1) both;
 }
 
-.playing-card:nth-child(2) { animation-delay: .08s; }
-.playing-card:nth-child(3) { animation-delay: .16s; }
-.playing-card:nth-child(4) { animation-delay: .24s; }
-.playing-card:nth-child(5) { animation-delay: .32s; }
+.blackjack-dealer .playing-card:nth-child(1) { animation-delay: .12s; }
+.blackjack-hand:not(.blackjack-dealer) .playing-card:nth-child(1) { animation-delay: .38s; }
+.blackjack-dealer .playing-card:nth-child(2) { animation-delay: .64s; }
+.blackjack-hand:not(.blackjack-dealer) .playing-card:nth-child(2) { animation-delay: .9s; }
+.blackjack-dealer .playing-card:nth-child(n+3) { animation-delay: .24s; }
+.blackjack-hand:not(.blackjack-dealer) .playing-card:nth-child(n+3) { animation-delay: .12s; }
 
 @keyframes deal-card {
-  from { opacity: 0; transform: translateY(-18px) rotate(-5deg) scale(.92); }
-  to { opacity: 1; transform: translateY(0) rotate(0) scale(1); }
+  from { opacity: 0; transform: perspective(520px) translateY(-24px) rotateY(78deg) rotateZ(-5deg) scale(.88); }
+  72% { opacity: 1; transform: perspective(520px) translateY(2px) rotateY(-7deg) rotateZ(1deg) scale(1.02); }
+  to { opacity: 1; transform: perspective(520px) translateY(0) rotateY(0) rotateZ(0) scale(1); }
 }
 
 .roulette-table {
@@ -1447,6 +1502,37 @@ a {
   transition: transform 4.1s cubic-bezier(.08, .68, .08, 1);
 }
 
+.roulette-ball-track {
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  transition: transform 4.2s cubic-bezier(.12, .68, .14, 1);
+}
+
+.roulette-ball {
+  position: absolute;
+  top: 7px;
+  left: 50%;
+  width: 12px;
+  height: 12px;
+  border: 1px solid #fff9e7;
+  border-radius: 50%;
+  background: radial-gradient(circle at 32% 26%, #fff, #e4e0d1 54%, #9b9b8e);
+  box-shadow: 0 1px 5px rgba(0, 0, 0, .8), 0 0 7px rgba(255, 255, 235, .7);
+  transform: translateX(-50%);
+}
+
+.roulette-ball-track-active .roulette-ball {
+  animation: roulette-ball-rattle .38s ease-in-out infinite alternate;
+}
+
+@keyframes roulette-ball-rattle {
+  from { margin-top: 0; }
+  to { margin-top: -3px; }
+}
+
 .roulette-wheel::before {
   position: absolute;
   inset: 15px;
@@ -1478,6 +1564,13 @@ a {
 
 .roulette-number-zero {
   color: #d3ffe1;
+}
+
+.roulette-number-winner {
+  z-index: 2;
+  border-radius: 50%;
+  background: rgba(245, 220, 151, .2);
+  box-shadow: 0 0 0 1px rgba(245, 220, 151, .9), 0 0 12px rgba(245, 220, 151, .8);
 }
 
 .roulette-wheel-center {
@@ -2046,11 +2139,16 @@ a {
 @media (prefers-reduced-motion: reduce) {
   .game-result-banner,
   .playing-card,
-  .slot-machine-spinning .slot-reel {
+  .slot-reel-strip,
+  .slot-reel-stopped .slot-reel-face,
+  .slot-machine-win .slot-reel,
+  .blackjack-hand-current,
+  .roulette-ball-track-active .roulette-ball {
     animation: none;
   }
 
   .roulette-wheel,
+  .roulette-ball-track,
   .slot-lever-arm,
   .slot-lever-knob {
     transition: none;
