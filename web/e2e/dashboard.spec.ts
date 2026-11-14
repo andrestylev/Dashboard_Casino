@@ -407,6 +407,12 @@ test("player casino lobby and age-gated registration are separate from admin log
   await expect(page.locator(".slot-lever")).toBeVisible();
   await page.getByRole("link", { name: "Ruleta", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Ruleta europea" })).toBeVisible();
+  const playerHeader = page.locator(".player-header");
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+  await expect(playerHeader).toHaveCSS("position", "sticky");
+  await expect.poll(async () => (await playerHeader.boundingBox())?.y ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(1);
+  await page.evaluate(() => window.scrollTo(0, 0));
   const betTypeSelect = await page.getByLabel("Tipo").boundingBox();
   expect(betTypeSelect?.height ?? 0).toBeGreaterThanOrEqual(44);
   await page.getByLabel("Tipo").selectOption("number");

@@ -65,6 +65,8 @@ $1 a $50.000 por operación, comprar paquetes de fichas y adquirir una membresí
 ningún procesador de pago ni se solicitan datos de tarjetas; los saldos no son dinero real y no se
 pueden retirar ni canjear.
 
+
+## Opcional:
 ### Detener, reiniciar y restablecer
 
 Detén los contenedores sin borrar la base de datos ni los datos de los jugadores:
@@ -103,7 +105,7 @@ Los puertos predeterminados son `5173` (Vite), `8000` (API) y `55432` (PostgreSQ
 en uso, detén la aplicación que lo utiliza o cambia el puerto correspondiente del equipo anfitrión
 en `docker-compose.yml` antes de iniciar los servicios. Las credenciales de PostgreSQL de Compose
 son solo para desarrollo local; no expongas esta configuración a Internet.
-
+ 
 ## Estructura del proyecto
 
 ```text

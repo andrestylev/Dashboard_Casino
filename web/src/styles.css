@@ -154,8 +154,9 @@ a {
 }
 
 .player-header {
-  position: relative;
-  z-index: 1;
+  position: sticky;
+  z-index: 20;
+  top: 0;
   display: flex;
   min-height: 78px;
   align-items: center;
@@ -163,7 +164,9 @@ a {
   gap: 22px;
   padding: 0 clamp(20px, 5vw, 76px);
   border-bottom: 1px solid var(--player-line);
-  background: rgba(17, 21, 20, .92);
+  background: rgba(17, 21, 20, .94);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, .2);
 }
 
 .player-brand {
